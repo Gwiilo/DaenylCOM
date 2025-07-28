@@ -295,20 +295,16 @@ class ShowcaseManager {
             </div>
         `;
 
-        // Add click handler to open in editor
-        showcaseElement.addEventListener('click', () => {
-            this.openInEditor(codeblock);
-        });
-
+        // Remove the click handler - interactivity will be through buttons only
         this.grid.appendChild(showcaseElement);
 
         // Initialize Three.js preview if applicable
         if (codeblock.hasThreeJS) {
-            this.initializeThreeJSPreview(codeblock.name);
+            this.initializeThreeJSPreview(codeblock.name, codeblock);
         }
     }
 
-    async initializeThreeJSPreview(name) {
+    async initializeThreeJSPreview(name, codeblock) {
         const previewElement = document.getElementById(`preview-${name}`);
         if (!previewElement || !window.THREE) return;
 
@@ -339,7 +335,7 @@ class ShowcaseManager {
             controlsOverlay.className = 'preview-controls';
             controlsOverlay.innerHTML = `
                 <button class="preview-control-btn play-btn" title="Play/Pause">⏸️</button>
-                <button class="preview-control-btn fullscreen-btn" title="View in Editor">⛶</button>
+                <button class="preview-control-btn code-btn" title="View Code">📝</button>
             `;
             previewElement.appendChild(controlsOverlay);
 
@@ -395,7 +391,7 @@ class ShowcaseManager {
 
             // Handle controls
             const playBtn = controlsOverlay.querySelector('.play-btn');
-            const fullscreenBtn = controlsOverlay.querySelector('.fullscreen-btn');
+            const codeBtn = controlsOverlay.querySelector('.code-btn');
 
             playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -404,9 +400,9 @@ class ShowcaseManager {
                 if (isPlaying) animate();
             });
 
-            fullscreenBtn.addEventListener('click', (e) => {
+            codeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.openInEditor({ name });
+                this.openInEditor(codeblock);
             });
 
             // Handle resize
@@ -438,7 +434,7 @@ class ShowcaseManager {
         switch (name) {
             case 'boids':
                 return `
-                    // Simplified boids for preview
+                    // Improved mini boids with proper flocking behavior
                     class MiniBoid {
                         constructor() {
                             this.position = new THREE.Vector3(
@@ -451,8 +447,11 @@ class ShowcaseManager {
                                 (Math.random() - 0.5) * 1,
                                 (Math.random() - 0.5) * 1
                             );
+                            this.acceleration = new THREE.Vector3();
+                            this.maxForce = 0.02;
+                            this.maxSpeed = 1.5;
                             
-                            const geometry = new THREE.ConeGeometry(0.05, 0.15, 3);
+                            const geometry = new THREE.ConeGeometry(0.05, 0.15, 4);
                             const material = new THREE.MeshBasicMaterial({ 
                                 color: new THREE.Color().setHSL(Math.random(), 0.7, 0.6)
                             });
@@ -461,33 +460,141 @@ class ShowcaseManager {
                             scene.add(this.mesh);
                         }
                         
-                        update() {
-                            this.position.add(this.velocity.clone().multiplyScalar(0.01));
+                        flock(boids) {
+                            let sep = this.separate(boids);
+                            let ali = this.align(boids);
+                            let coh = this.cohesion(boids);
                             
-                            // Simple boundary wrapping
+                            sep.multiplyScalar(1.5);
+                            ali.multiplyScalar(1.0);
+                            coh.multiplyScalar(1.0);
+                            
+                            this.acceleration.add(sep);
+                            this.acceleration.add(ali);
+                            this.acceleration.add(coh);
+                        }
+                        
+                        separate(boids) {
+                            let desiredSeparation = 0.8;
+                            let steer = new THREE.Vector3();
+                            let count = 0;
+                            
+                            for (let other of boids) {
+                                let d = this.position.distanceTo(other.position);
+                                if (d > 0 && d < desiredSeparation) {
+                                    let diff = new THREE.Vector3().subVectors(this.position, other.position);
+                                    diff.normalize();
+                                    diff.divideScalar(d);
+                                    steer.add(diff);
+                                    count++;
+                                }
+                            }
+                            
+                            if (count > 0) {
+                                steer.divideScalar(count);
+                                steer.normalize();
+                                steer.multiplyScalar(this.maxSpeed);
+                                steer.sub(this.velocity);
+                                steer.clampLength(0, this.maxForce);
+                            }
+                            
+                            return steer;
+                        }
+                        
+                        align(boids) {
+                            let neighborDist = 1.5;
+                            let sum = new THREE.Vector3();
+                            let count = 0;
+                            
+                            for (let other of boids) {
+                                let d = this.position.distanceTo(other.position);
+                                if (d > 0 && d < neighborDist) {
+                                    sum.add(other.velocity);
+                                    count++;
+                                }
+                            }
+                            
+                            if (count > 0) {
+                                sum.divideScalar(count);
+                                sum.normalize();
+                                sum.multiplyScalar(this.maxSpeed);
+                                let steer = new THREE.Vector3().subVectors(sum, this.velocity);
+                                steer.clampLength(0, this.maxForce);
+                                return steer;
+                            }
+                            
+                            return new THREE.Vector3();
+                        }
+                        
+                        cohesion(boids) {
+                            let neighborDist = 1.5;
+                            let sum = new THREE.Vector3();
+                            let count = 0;
+                            
+                            for (let other of boids) {
+                                let d = this.position.distanceTo(other.position);
+                                if (d > 0 && d < neighborDist) {
+                                    sum.add(other.position);
+                                    count++;
+                                }
+                            }
+                            
+                            if (count > 0) {
+                                sum.divideScalar(count);
+                                return this.seek(sum);
+                            }
+                            
+                            return new THREE.Vector3();
+                        }
+                        
+                        seek(target) {
+                            let desired = new THREE.Vector3().subVectors(target, this.position);
+                            desired.normalize();
+                            desired.multiplyScalar(this.maxSpeed);
+                            
+                            let steer = new THREE.Vector3().subVectors(desired, this.velocity);
+                            steer.clampLength(0, this.maxForce);
+                            return steer;
+                        }
+                        
+                        update() {
+                            this.velocity.add(this.acceleration);
+                            this.velocity.clampLength(0, this.maxSpeed);
+                            this.position.add(this.velocity.clone().multiplyScalar(0.02));
+                            this.acceleration.multiplyScalar(0);
+                            
+                            // Boundary wrapping
                             ['x', 'y', 'z'].forEach(axis => {
                                 if (this.position[axis] > 4) this.position[axis] = -4;
                                 if (this.position[axis] < -4) this.position[axis] = 4;
                             });
                             
+                            // Update mesh position
                             this.mesh.position.copy(this.position);
-                            if (this.velocity.length() > 0) {
-                                this.mesh.lookAt(this.position.clone().add(this.velocity));
+                            
+                            // Orient mesh in direction of movement
+                            if (this.velocity.length() > 0.01) {
+                                const target = this.position.clone().add(this.velocity);
+                                this.mesh.lookAt(target);
                             }
                         }
                     }
                     
                     const boids = [];
-                    for (let i = 0; i < 15; i++) {
+                    for (let i = 0; i < 12; i++) {
                         boids.push(new MiniBoid());
                     }
                     
                     camera.position.set(0, 0, 8);
                     
                     function animate() {
-                        boids.forEach(boid => boid.update());
-                        camera.position.x = Math.cos(Date.now() * 0.0003) * 8;
-                        camera.position.z = Math.sin(Date.now() * 0.0003) * 8;
+                        // Apply flocking behavior
+                        boids.forEach(boid => {
+                            boid.flock(boids);
+                            boid.update();
+                        });
+                        
+                        // Static camera - no rotation
                         camera.lookAt(0, 0, 0);
                     }
                 `;
