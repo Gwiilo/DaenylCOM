@@ -51,6 +51,8 @@ html, body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     scroll-behavior: smooth;
     line-height: 1.6;
+    margin: 0;
+    padding: 0;
 }
 
 /* Modern text rendering */
@@ -145,14 +147,15 @@ body {
     position: relative;
     z-index: 10;
     min-height: 100vh;
-    padding: 80px 40px;
+    padding: 80px 20px;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
 }
 
 .showcase-container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
+    width: 100%;
 }
 
 .showcase-title {
@@ -166,9 +169,11 @@ body {
 
 .codeblocks-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: 40px;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 30px;
     padding: 20px 0;
+    max-width: none;
+    margin: 0;
 }
 
 .codeblock-showcase {
@@ -180,6 +185,9 @@ body {
     backdrop-filter: blur(10px);
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    aspect-ratio: 1;
 }
 
 .codeblock-showcase:hover {
@@ -189,11 +197,12 @@ body {
 }
 
 .codeblock-preview {
-    height: 250px;
+    flex: 3;
     background: var(--bg-primary);
     border-bottom: 1px solid var(--border-primary);
     position: relative;
     overflow: hidden;
+    aspect-ratio: 1;
 }
 
 .codeblock-preview canvas {
@@ -266,7 +275,11 @@ body {
 }
 
 .codeblock-info {
-    padding: 24px;
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
 .codeblock-name {
@@ -456,12 +469,13 @@ body {
     }
     
     .showcase-section {
-        padding: 40px 20px;
+        padding: 40px 10px;
     }
     
     .codeblocks-grid {
         grid-template-columns: 1fr;
-        gap: 30px;
+        gap: 20px;
+        padding: 10px 0;
     }
     
     .codeblock-frame {
@@ -483,7 +497,11 @@ body {
     
     .codeblocks-grid {
         grid-template-columns: 1fr;
-        gap: 20px;
+        gap: 15px;
+    }
+    
+    .showcase-section {
+        padding: 30px 5px;
     }
 }
 
