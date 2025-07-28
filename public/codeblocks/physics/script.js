@@ -16,6 +16,12 @@ let isDragging = false;
 let dragTarget = new THREE.Vector3();
 let lastDragPosition = new THREE.Vector3();
 
+// Camera orbit controls
+let isOrbitMode = false;
+let lastMousePosition = { x: 0, y: 0 };
+let cameraDistance = 15;
+let cameraAngles = { theta: 0, phi: Math.PI * 0.3 };
+
 // Cutting system variables
 let cuttingStartPoint = null;
 let cuttingEndPoint = null;
@@ -44,9 +50,9 @@ function initPhysics() {
         constraints: []
     };
 
-    // Position camera
-    camera.position.set(0, 5, 15);
-    camera.lookAt(0, 0, 0);
+    // Position camera with orbital setup
+    cameraDistance = 15;
+    updateCameraPosition();
 
     // Add lighting
     setupLighting();
@@ -100,13 +106,10 @@ function createGround() {
 
 function createDemoObjects() {
     // Create demo sphere
-    createRigidSphere(new THREE.Vector3(-3, 5, 0), 1, 0xff4444);
+    createRigidSphere(new THREE.Vector3(-2, 5, 0), 1, 0xff4444);
     
     // Create demo cube
-    createRigidCube(new THREE.Vector3(0, 5, 0), 1.5, 0x44ff44);
-    
-    // Create jelly bean (soft body)
-    createJellyBean(new THREE.Vector3(3, 5, 0), 0xffff44);
+    createRigidCube(new THREE.Vector3(2, 5, 0), 1.5, 0x44ff44);
 }
 
 function createRigidSphere(position, radius, color) {
@@ -279,6 +282,9 @@ function onMouseDown(event) {
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     
+    lastMousePosition.x = event.clientX;
+    lastMousePosition.y = event.clientY;
+    
     raycaster.setFromCamera(mouse, camera);
     
     // Check for sun dragging mode (hold Shift)
@@ -324,6 +330,10 @@ function onMouseDown(event) {
             }
             
             renderer.domElement.style.cursor = 'grabbing';
+        } else {
+            // No object selected - start camera orbit mode
+            isOrbitMode = true;
+            renderer.domElement.style.cursor = 'grab';
         }
     }
 }
@@ -347,6 +357,22 @@ function onMouseMove(event) {
         spherical.radius = 20; // Keep distance constant
         
         window.sunLight.position.setFromSpherical(spherical);
+        
+    } else if (isOrbitMode) {
+        // Handle camera orbit
+        const deltaX = event.clientX - lastMousePosition.x;
+        const deltaY = event.clientY - lastMousePosition.y;
+        
+        cameraAngles.theta -= deltaX * 0.01;
+        cameraAngles.phi += deltaY * 0.01;
+        
+        // Constrain phi to avoid flipping
+        cameraAngles.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngles.phi));
+        
+        updateCameraPosition();
+        
+        lastMousePosition.x = event.clientX;
+        lastMousePosition.y = event.clientY;
         
     } else if (cuttingMode && isDrawingCut) {
         // Continue drawing cutting line
@@ -376,6 +402,7 @@ function onMouseUp(event) {
     selectedObject = null;
     sunDragMode = false;
     isDragging = false;
+    isOrbitMode = false;
     renderer.domElement.style.cursor = cuttingMode ? 'crosshair' : 'default';
 }
 
@@ -399,7 +426,18 @@ function onRightClick(event) {
 
 function onMouseWheel(event) {
     const delta = event.deltaY * 0.001;
-    camera.position.multiplyScalar(1 + delta);
+    cameraDistance *= (1 + delta);
+    cameraDistance = Math.max(5, Math.min(50, cameraDistance)); // Constrain zoom
+    updateCameraPosition();
+}
+
+function updateCameraPosition() {
+    const x = cameraDistance * Math.sin(cameraAngles.phi) * Math.cos(cameraAngles.theta);
+    const y = cameraDistance * Math.cos(cameraAngles.phi);
+    const z = cameraDistance * Math.sin(cameraAngles.phi) * Math.sin(cameraAngles.theta);
+    
+    camera.position.set(x, y, z);
+    camera.lookAt(0, 0, 0);
 }
 
 function onKeyDown(event) {
@@ -661,18 +699,38 @@ function performAdvancedCut(object, intersectionPoints) {
 }
 
 function calculateCuttingPlane(object, intersectionPoints) {
-    // Use the object's center and the average of intersection points to create a cutting plane
-    const avgIntersection = new THREE.Vector3();
-    intersectionPoints.forEach(point => avgIntersection.add(point));
-    avgIntersection.divideScalar(intersectionPoints.length);
+    // Calculate cutting direction from the cutting line path
+    let cuttingDirection = new THREE.Vector3();
     
-    // Create cutting normal (simplified - use camera direction)
+    if (cuttingPath.length >= 2) {
+        // Use the direction of the cutting line
+        const startPoint = cuttingPath[0];
+        const endPoint = cuttingPath[cuttingPath.length - 1];
+        cuttingDirection = new THREE.Vector3().subVectors(endPoint, startPoint).normalize();
+        
+        // Create perpendicular normal to the cutting line (cutting plane normal)
+        const cameraDirection = camera.getWorldDirection(new THREE.Vector3());
+        const normal = new THREE.Vector3().crossVectors(cuttingDirection, cameraDirection).normalize();
+        
+        console.log('📐 Cutting direction:', cuttingDirection);
+        console.log('📐 Cutting normal:', normal);
+        
+        return {
+            point: intersectionPoints[0],
+            normal: normal,
+            cuttingDirection: cuttingDirection,
+            localPoint: object.worldToLocal(intersectionPoints[0].clone()),
+            localNormal: object.worldToLocal(normal.clone().add(object.position)).sub(object.worldToLocal(object.position.clone()))
+        };
+    }
+    
+    // Fallback to camera direction if cutting path is too short
     const normal = camera.getWorldDirection(new THREE.Vector3());
-    
     return {
-        point: avgIntersection,
+        point: intersectionPoints[0],
         normal: normal,
-        localPoint: object.worldToLocal(avgIntersection.clone()),
+        cuttingDirection: normal.clone(),
+        localPoint: object.worldToLocal(intersectionPoints[0].clone()),
         localNormal: object.worldToLocal(normal.clone().add(object.position)).sub(object.worldToLocal(object.position.clone()))
     };
 }
@@ -701,36 +759,45 @@ function cutSphereWithPlane(sphere, cuttingPlane) {
 }
 
 function createSphereCutPiece(position, radius, color, velocity, angularVelocity, cutDirection, side) {
-    // Create a cut sphere piece using custom geometry
-    const geometry = new THREE.SphereGeometry(radius * 0.8, 16, 16, 0, Math.PI * 2, 0, Math.PI * (side > 0 ? 0.7 : 0.7));
+    // Create a cut sphere piece using custom geometry with interior faces
+    const phiStart = 0;
+    const phiLength = Math.PI * 2;
+    const thetaStart = side > 0 ? 0 : Math.PI * 0.4;
+    const thetaLength = Math.PI * 0.6;
+    
+    const geometry = new THREE.SphereGeometry(radius * 0.8, 16, 16, phiStart, phiLength, thetaStart, thetaLength);
+    
+    // Add interior faces for the cut surface
+    addSphereCutSurface(geometry, radius * 0.8, side);
     
     const material = new THREE.MeshPhysicalMaterial({
-        color: color,
+        color: color, // Use the passed color directly
         metalness: 0.0,
         roughness: 0.7,
         clearcoat: 0.1,
-        clearcoatRoughness: 0.8
+        clearcoatRoughness: 0.8,
+        side: THREE.DoubleSide // Show both sides of faces
     });
     
     const piece = new THREE.Mesh(geometry, material);
     
-    // Position the piece offset from the cutting plane
-    const offset = cutDirection.clone().multiplyScalar(radius * 0.3 * side);
+    // Position the piece offset from the cutting plane (reduced velocity)
+    const offset = cutDirection.clone().multiplyScalar(radius * 0.2 * side);
     piece.position.copy(position).add(offset);
     
     piece.castShadow = true;
     piece.receiveShadow = true;
     scene.add(piece);
 
-    // Physics properties for the cut piece
+    // Physics properties for the cut piece - mark as cut piece for recursive cutting
     piece.userData.physics = {
         type: 'rigid',
-        mass: radius * radius * radius * 4.18 * 400, // Reduced mass for cut piece
-        velocity: velocity.clone().add(cutDirection.clone().multiplyScalar(side * 3)),
+        mass: radius * radius * radius * 4.18 * 400,
+        velocity: velocity.clone().add(cutDirection.clone().multiplyScalar(side * 1.5)), // Reduced from 3 to 1.5
         angularVelocity: angularVelocity.clone().add(new THREE.Vector3(
-            (Math.random() - 0.5) * 4,
-            (Math.random() - 0.5) * 4,
-            (Math.random() - 0.5) * 4
+            (Math.random() - 0.5) * 2, // Reduced from 4 to 2
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2
         )),
         restitution: 0.6,
         friction: 0.5,
@@ -741,12 +808,63 @@ function createSphereCutPiece(position, radius, color, velocity, angularVelocity
         momentOfInertia: (2/5) * radius * radius * radius * 4.18 * 400 * radius * radius,
         isBeingDragged: false,
         dragForce: 15.0,
-        maxDragVelocity: 8.0
+        maxDragVelocity: 8.0,
+        isCutPiece: true, // Mark as cut piece for recursive cutting
+        originalRadius: radius // Store original size for reference
     };
 
     objects.push(piece);
     world.objects.push(piece);
     return piece;
+}
+
+function addSphereCutSurface(geometry, radius, side) {
+    // Add flat circular surface to show the interior of the cut
+    const positions = geometry.attributes.position.array;
+    const normals = geometry.attributes.normals?.array;
+    const uvs = geometry.attributes.uv.array;
+    
+    // Create circular flat surface
+    const segments = 16;
+    const centerY = side > 0 ? -radius * 0.4 : radius * 0.4;
+    
+    // Add vertices for the flat circular surface
+    const newPositions = [];
+    const newNormals = [];
+    const newUvs = [];
+    
+    // Center vertex
+    newPositions.push(0, centerY, 0);
+    newNormals.push(0, side > 0 ? -1 : 1, 0);
+    newUvs.push(0.5, 0.5);
+    
+    // Ring vertices
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const x = Math.cos(angle) * radius * 0.6;
+        const z = Math.sin(angle) * radius * 0.6;
+        
+        newPositions.push(x, centerY, z);
+        newNormals.push(0, side > 0 ? -1 : 1, 0);
+        newUvs.push(0.5 + Math.cos(angle) * 0.5, 0.5 + Math.sin(angle) * 0.5);
+    }
+    
+    // Combine with existing geometry
+    const totalPositions = new Float32Array(positions.length + newPositions.length);
+    totalPositions.set(positions);
+    totalPositions.set(newPositions, positions.length);
+    
+    const totalNormals = new Float32Array((normals?.length || 0) + newNormals.length);
+    if (normals) totalNormals.set(normals);
+    totalNormals.set(newNormals, normals?.length || 0);
+    
+    const totalUvs = new Float32Array(uvs.length + newUvs.length);
+    totalUvs.set(uvs);
+    totalUvs.set(newUvs, uvs.length);
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(totalPositions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(totalNormals, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(totalUvs, 2));
 }
 
 function cutBoxWithPlane(box, cuttingPlane) {
@@ -788,31 +906,35 @@ function cutBoxWithPlane(box, cuttingPlane) {
 }
 
 function createBoxCutPiece(position, size, color, velocity, angularVelocity, axis, side) {
-    // Create geometry for cut piece
+    // Create geometry for cut piece with interior faces
     let geometry;
-    const cutRatio = 0.6; // How much of the original size each piece gets
+    const cutRatio = 0.6;
     
     if (axis === 'x') {
         geometry = new THREE.BoxGeometry(size * cutRatio, size, size);
     } else if (axis === 'y') {
         geometry = new THREE.BoxGeometry(size, size * cutRatio, size);
-    } else { // z axis
+    } else {
         geometry = new THREE.BoxGeometry(size, size, size * cutRatio);
     }
     
+    // Add interior surface to show the cut
+    addBoxCutSurface(geometry, size, axis, side);
+    
     const material = new THREE.MeshPhysicalMaterial({
-        color: color,
+        color: color, // Use the passed color directly
         metalness: 0.0,
         roughness: 0.8,
         clearcoat: 0.1,
-        clearcoatRoughness: 0.9
+        clearcoatRoughness: 0.9,
+        side: THREE.DoubleSide // Show both sides of faces
     });
     
     const piece = new THREE.Mesh(geometry, material);
     
-    // Position the piece offset from the cutting plane
+    // Position the piece offset from the cutting plane (reduced offset)
     const offset = new THREE.Vector3();
-    const offsetDistance = size * 0.25;
+    const offsetDistance = size * 0.15; // Reduced from 0.25
     
     if (axis === 'x') {
         offset.x = offsetDistance * side;
@@ -827,16 +949,16 @@ function createBoxCutPiece(position, size, color, velocity, angularVelocity, axi
     piece.receiveShadow = true;
     scene.add(piece);
 
-    // Physics properties for the cut piece
+    // Physics properties for the cut piece - mark as cut piece for recursive cutting
     const pieceSize = size * cutRatio;
     piece.userData.physics = {
         type: 'rigid',
-        mass: pieceSize * pieceSize * pieceSize * 400, // Reduced mass for cut piece
-        velocity: velocity.clone().add(offset.clone().normalize().multiplyScalar(4)),
+        mass: pieceSize * pieceSize * pieceSize * 400,
+        velocity: velocity.clone().add(offset.clone().normalize().multiplyScalar(2)), // Reduced from 4 to 2
         angularVelocity: angularVelocity.clone().add(new THREE.Vector3(
-            (Math.random() - 0.5) * 3,
-            (Math.random() - 0.5) * 3,
-            (Math.random() - 0.5) * 3
+            (Math.random() - 0.5) * 1.5, // Reduced from 3 to 1.5
+            (Math.random() - 0.5) * 1.5,
+            (Math.random() - 0.5) * 1.5
         )),
         restitution: 0.4,
         friction: 0.7,
@@ -847,12 +969,69 @@ function createBoxCutPiece(position, size, color, velocity, angularVelocity, axi
         momentOfInertia: (1/6) * pieceSize * pieceSize * pieceSize * 400 * (pieceSize * pieceSize + pieceSize * pieceSize),
         isBeingDragged: false,
         dragForce: 15.0,
-        maxDragVelocity: 8.0
+        maxDragVelocity: 8.0,
+        isCutPiece: true, // Mark as cut piece for recursive cutting
+        originalSize: size // Store original size for reference
     };
 
     objects.push(piece);
     world.objects.push(piece);
     return piece;
+}
+
+function addBoxCutSurface(geometry, size, axis, side) {
+    // Add flat rectangular surface to show the interior of the cut
+    const positions = geometry.attributes.position.array;
+    const normals = geometry.attributes.normals?.array;
+    const uvs = geometry.attributes.uv.array;
+    
+    // Create flat rectangular surface on the cut side
+    const newPositions = [];
+    const newNormals = [];
+    const newUvs = [];
+    
+    const halfSize = size * 0.5;
+    
+    if (axis === 'x') {
+        const x = side > 0 ? -halfSize * 0.6 : halfSize * 0.6;
+        // Add rectangular face
+        newPositions.push(x, -halfSize, -halfSize, x, halfSize, -halfSize, x, halfSize, halfSize, x, -halfSize, halfSize);
+        for (let i = 0; i < 4; i++) {
+            newNormals.push(side > 0 ? -1 : 1, 0, 0);
+        }
+        newUvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    } else if (axis === 'y') {
+        const y = side > 0 ? -halfSize * 0.6 : halfSize * 0.6;
+        newPositions.push(-halfSize, y, -halfSize, halfSize, y, -halfSize, halfSize, y, halfSize, -halfSize, y, halfSize);
+        for (let i = 0; i < 4; i++) {
+            newNormals.push(0, side > 0 ? -1 : 1, 0);
+        }
+        newUvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    } else {
+        const z = side > 0 ? -halfSize * 0.6 : halfSize * 0.6;
+        newPositions.push(-halfSize, -halfSize, z, halfSize, -halfSize, z, halfSize, halfSize, z, -halfSize, halfSize, z);
+        for (let i = 0; i < 4; i++) {
+            newNormals.push(0, 0, side > 0 ? -1 : 1);
+        }
+        newUvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    }
+    
+    // Combine with existing geometry
+    const totalPositions = new Float32Array(positions.length + newPositions.length);
+    totalPositions.set(positions);
+    totalPositions.set(newPositions, positions.length);
+    
+    const totalNormals = new Float32Array((normals?.length || 0) + newNormals.length);
+    if (normals) totalNormals.set(normals);
+    totalNormals.set(newNormals, normals?.length || 0);
+    
+    const totalUvs = new Float32Array(uvs.length + newUvs.length);
+    totalUvs.set(uvs);
+    totalUvs.set(newUvs, uvs.length);
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(totalPositions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(totalNormals, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(totalUvs, 2));
 }
 
 function cutCompoundWithPlane(compound, cuttingPlane) {
@@ -921,7 +1100,8 @@ function createJellybeanCutPiece(position, velocity, cutDirection, side) {
         transmission: 0.05,
         thickness: 0.3,
         clearcoat: 0.3,
-        clearcoatRoughness: 0.7
+        clearcoatRoughness: 0.7,
+        side: THREE.DoubleSide // Show interior faces
     });
     
     const body = new THREE.Mesh(bodyGeometry, jellyMaterial);
@@ -945,10 +1125,10 @@ function createJellybeanCutPiece(position, velocity, cutDirection, side) {
     group.position.copy(position).add(offset);
     scene.add(group);
 
-    // Physics properties for the cut piece
+    // Physics properties for the cut piece - mark as cut piece for recursive cutting
     group.userData.physics = {
         type: 'soft',
-        mass: 300, // Reduced for cut piece
+        mass: 300,
         velocity: velocity.clone().add(cutDirection.clone().multiplyScalar(side * 3)),
         angularVelocity: new THREE.Vector3(
             (Math.random() - 0.5) * 4,
@@ -967,7 +1147,8 @@ function createJellybeanCutPiece(position, velocity, cutDirection, side) {
         momentOfInertia: 200,
         isBeingDragged: false,
         dragForce: 12.0,
-        maxDragVelocity: 7.0
+        maxDragVelocity: 7.0,
+        isCutPiece: true // Mark as cut piece for recursive cutting
     };
 
     objects.push(group);
