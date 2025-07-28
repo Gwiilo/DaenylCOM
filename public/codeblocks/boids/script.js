@@ -163,7 +163,7 @@ class Boid {
 
 // Initialize boids
 const boids = [];
-const numBoids = 50;
+const numBoids = 200;
 
 for (let i = 0; i < numBoids; i++) {
     boids.push(new Boid());
@@ -212,8 +212,8 @@ function animate() {
     }
     
     // Slowly rotate the camera for a better view
-    camera.position.x = Math.cos(Date.now() * 0.0005) * 12;
-    camera.position.z = Math.sin(Date.now() * 0.0005) * 12;
+    //camera.position.x = Math.cos(Date.now() * 0.0005) * 12;
+    //camera.position.z = Math.sin(Date.now() * 0.0005) * 12;
     camera.lookAt(0, 0, 0);
 }
 

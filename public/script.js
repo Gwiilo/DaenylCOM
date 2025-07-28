@@ -455,12 +455,19 @@ class ShowcaseManager {
                             this.maxSpeed = 1.5;
                             
                             const geometry = new THREE.ConeGeometry(0.05, 0.15, 4);
-                            const material = new THREE.MeshBasicMaterial({ 
-                                color: new THREE.Color().setHSL(Math.random(), 0.7, 0.6)
+                            this.material = new THREE.MeshBasicMaterial({ 
+                                color: new THREE.Color().setHSL(0, 0.7, 0.6)
                             });
-                            this.mesh = new THREE.Mesh(geometry, material);
+                            this.mesh = new THREE.Mesh(geometry, this.material);
                             this.mesh.position.copy(this.position);
                             scene.add(this.mesh);
+                        }
+                        
+                        updateColor() {
+                            // Calculate hue based on position (top-down color wheel)
+                            const angle = Math.atan2(this.position.z, this.position.x);
+                            const hue = (angle + Math.PI) / (2 * Math.PI); // Normalize to 0-1
+                            this.material.color.setHSL(hue, 0.7, 0.6);
                         }
                         
                         flock(boids) {
@@ -575,6 +582,9 @@ class ShowcaseManager {
                             // Update mesh position
                             this.mesh.position.copy(this.position);
                             
+                            // Update color based on position
+                            this.updateColor();
+                            
                             // Orient mesh in direction of movement
                             if (this.velocity.length() > 0.01) {
                                 // Create a target point ahead of the boid
@@ -591,7 +601,56 @@ class ShowcaseManager {
                         boids.push(new MiniBoid());
                     }
                     
-                    camera.position.set(0, 0, 8);
+                    // Camera controls
+                    let cameraAngle = { theta: 0, phi: Math.PI / 4 };
+                    const cameraDistance = 8;
+                    let isDragging = false;
+                    let previousMouse = { x: 0, y: 0 };
+                    
+                    // Mouse interaction for camera control
+                    renderer.domElement.addEventListener('mousedown', (event) => {
+                        isDragging = true;
+                        previousMouse.x = event.clientX;
+                        previousMouse.y = event.clientY;
+                        renderer.domElement.style.cursor = 'grabbing';
+                    });
+                    
+                    renderer.domElement.addEventListener('mousemove', (event) => {
+                        if (isDragging) {
+                            const deltaX = event.clientX - previousMouse.x;
+                            const deltaY = event.clientY - previousMouse.y;
+                            
+                            cameraAngle.theta -= deltaX * 0.01;
+                            cameraAngle.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngle.phi + deltaY * 0.01));
+                            
+                            previousMouse.x = event.clientX;
+                            previousMouse.y = event.clientY;
+                        }
+                    });
+                    
+                    renderer.domElement.addEventListener('mouseup', () => {
+                        isDragging = false;
+                        renderer.domElement.style.cursor = 'grab';
+                    });
+                    
+                    renderer.domElement.addEventListener('mouseleave', () => {
+                        isDragging = false;
+                        renderer.domElement.style.cursor = 'grab';
+                    });
+                    
+                    // Set initial cursor
+                    renderer.domElement.style.cursor = 'grab';
+                    
+                    // Update camera position based on spherical coordinates
+                    function updateCamera() {
+                        camera.position.x = cameraDistance * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
+                        camera.position.y = cameraDistance * Math.cos(cameraAngle.phi);
+                        camera.position.z = cameraDistance * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
+                        camera.lookAt(0, 0, 0);
+                    }
+                    
+                    // Initial camera position
+                    updateCamera();
                     
                     function animate() {
                         // Apply flocking behavior
@@ -600,8 +659,8 @@ class ShowcaseManager {
                             boid.update();
                         });
                         
-                        // Static camera - no rotation
-                        camera.lookAt(0, 0, 0);
+                        // Update camera position
+                        updateCamera();
                     }
                 `;
             default:
