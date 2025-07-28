@@ -92,7 +92,7 @@ class SimpleNoise {
 
 class IslandGenerator {
     constructor() {
-        this.size = 100; // 100x100 grid
+        this.size = 500; // Increased to 500x500 grid for larger world
         this.seaLevel = 0.25; // Set sea level to 0.25 as requested
         this.maxHeight = 8;
         this.noise = new SimpleNoise(Math.random() * 1000);
@@ -126,8 +126,8 @@ class IslandGenerator {
         // Create geometry from scratch with height data
         const width = this.size;
         const height = this.size;
-        const widthSegments = this.size - 1;
-        const heightSegments = this.size - 1;
+        const widthSegments = Math.min(this.size - 1, 199); // Cap at 199 for performance (200x200 grid)
+        const heightSegments = Math.min(this.size - 1, 199);
 
         const geometry = new THREE.BufferGeometry();
         
@@ -161,21 +161,18 @@ class IslandGenerator {
                 const falloff = Math.max(0, 1 - normalizedDistance);
                 
                 // Much more aggressive island-shaped falloff
-                // Force 100% water at edges, solid terrain at 1/4 distance from center
+                // Force terrain variation throughout, water only at edges
                 let islandFalloff;
                 if (normalizedDistance > 0.75) {
                     // Outer 25% - force to zero (guaranteed water)
                     islandFalloff = 0;
-                } else if (normalizedDistance < 0.25) {
-                    // Inner 25% - full terrain strength
-                    islandFalloff = 1;
                 } else {
-                    // Middle 50% - steep transition
-                    const transitionProgress = (normalizedDistance - 0.25) / 0.5; // 0 to 1 over middle range
-                    islandFalloff = Math.pow(1 - transitionProgress, 3); // Steep cubic falloff
+                    // Inner 75% - smooth transition with full noise effects
+                    const transitionProgress = normalizedDistance / 0.75; // 0 to 1 over inner 75%
+                    islandFalloff = Math.pow(1 - transitionProgress, 2); // Smooth quadratic falloff
                 }
                 
-                // Combine noise-driven height with aggressive island falloff
+                // Full noise-driven terrain throughout (no plateau)
                 terrainHeight = terrainHeight * islandFalloff;
                 
                 // Ensure minimum sea level
@@ -347,10 +344,11 @@ class IslandGenerator {
         camera.fov = 75;
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.near = 0.1;
-        camera.far = 1000;
+        camera.far = this.size * 2; // Scale far plane with world size
         
-        // Position camera to view terrain from an angle (standard 3D view)
-        camera.position.set(30, 25, 30);
+        // Position camera to view terrain from an angle (scaled to world size)
+        const distance = this.size * 0.15; // 15% of world size
+        camera.position.set(distance, distance * 0.8, distance);
         camera.lookAt(0, 0, 0);
         camera.updateProjectionMatrix();
     }
@@ -358,7 +356,7 @@ class IslandGenerator {
     setupControls() {
         // Camera controls for orbital movement (perspective mode)
         this.cameraAngle = { theta: 0.785, phi: Math.PI / 4 };
-        this.cameraDistance = 50; // Increased distance to see the whole island
+        this.cameraDistance = this.size * 0.2; // Start at 20% of world size
         this.isDragging = false;
         this.previousMouse = { x: 0, y: 0 };
 
@@ -397,12 +395,13 @@ class IslandGenerator {
             renderer.domElement.style.cursor = this.isTopDown ? 'default' : 'grab';
         });
 
-        // Wheel zoom
+        // Wheel zoom - scaled to world size
         renderer.domElement.addEventListener('wheel', (event) => {
             event.preventDefault();
             if (!this.isTopDown) {
-                this.cameraDistance += event.deltaY * 0.01;
-                this.cameraDistance = Math.max(10, Math.min(100, this.cameraDistance));
+                const zoomStep = this.size / 20; // Zoom step = world size / 10
+                this.cameraDistance += event.deltaY * 0.01 * zoomStep;
+                this.cameraDistance = Math.max(10, Math.min(this.size, this.cameraDistance)); // Min 10, max = world size
                 this.updatePerspectiveCamera();
             }
         });
