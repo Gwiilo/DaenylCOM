@@ -160,11 +160,23 @@ class IslandGenerator {
                 
                 const falloff = Math.max(0, 1 - normalizedDistance);
                 
-                // Much weaker falloff to allow mini islands and natural shapes
-                const weakFalloff = Math.pow(falloff, 0.3); // Less aggressive falloff
+                // Much more aggressive island-shaped falloff
+                // Force 100% water at edges, solid terrain at 1/4 distance from center
+                let islandFalloff;
+                if (normalizedDistance > 0.75) {
+                    // Outer 25% - force to zero (guaranteed water)
+                    islandFalloff = 0;
+                } else if (normalizedDistance < 0.25) {
+                    // Inner 25% - full terrain strength
+                    islandFalloff = 1;
+                } else {
+                    // Middle 50% - steep transition
+                    const transitionProgress = (normalizedDistance - 0.25) / 0.5; // 0 to 1 over middle range
+                    islandFalloff = Math.pow(1 - transitionProgress, 3); // Steep cubic falloff
+                }
                 
-                // Combine noise-driven height with gentle falloff
-                terrainHeight = terrainHeight * (0.7 + weakFalloff * 0.3); // 70% noise, 30% falloff
+                // Combine noise-driven height with aggressive island falloff
+                terrainHeight = terrainHeight * islandFalloff;
                 
                 // Ensure minimum sea level
                 terrainHeight = Math.max(terrainHeight, 0);
