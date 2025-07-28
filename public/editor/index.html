@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Editor - Daenyl.com</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
+</head>
+<body>
+    <div class="editor-container">
+        <!-- Header -->
+        <header class="editor-header">
+            <div class="header-left">
+                <h1 class="editor-title">Three.js Editor</h1>
+                <a href="../" class="back-link">← Back to Portfolio</a>
+            </div>
+            <div class="header-right">
+                <button id="run-btn" class="control-btn run-btn">▶ Run</button>
+                <button id="reset-btn" class="control-btn reset-btn">🔄 Reset</button>
+                <button id="fullscreen-btn" class="control-btn">⛶ Fullscreen</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="editor-main">
+            <!-- Code Editor -->
+            <div class="editor-panel">
+                <div class="panel-header">
+                    <span class="panel-title">JavaScript Code</span>
+                    <div class="panel-controls">
+                        <button id="load-example" class="small-btn">Load Example</button>
+                        <button id="clear-editor" class="small-btn">Clear</button>
+                    </div>
+                </div>
+                <div id="monaco-editor" class="code-editor"></div>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="preview-panel">
+                <div class="panel-header">
+                    <span class="panel-title">Live Preview</span>
+                    <div class="panel-controls">
+                        <span id="fps-counter" class="fps-counter">FPS: --</span>
+                    </div>
+                </div>
+                <div id="three-preview" class="three-preview">
+                    <div class="preview-loading">
+                        <div class="loading-spinner"></div>
+                        <p>Click "Run" to execute your Three.js code</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Panel -->
+        <div class="console-panel">
+            <div class="panel-header">
+                <span class="panel-title">Console</span>
+                <div class="panel-controls">
+                    <button id="clear-console" class="small-btn">Clear</button>
+                </div>
+            </div>
+            <div id="console-output" class="console-output"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

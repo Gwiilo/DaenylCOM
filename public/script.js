@@ -21,33 +21,19 @@ class DaenylPortfolio {
 
     onReady() {
         console.log('Daenyl.com Portfolio Loaded');
-        this.updateColors();
+        // Colors are now set in CSS - no dynamic updates needed
     }
 
-    // Calculate colors based on current day of year
+    // Setup fixed modern colors
     setupDynamicColors() {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), 0, 0);
-        const diff = now - start;
-        const oneDay = 1000 * 60 * 60 * 24;
-        const dayOfYear = Math.floor(diff / oneDay);
-        
-        // Ensure we're within 1-365/366 range
-        const currentDay = Math.max(1, Math.min(dayOfYear, this.isLeapYear(now.getFullYear()) ? 366 : 365));
-        
-        // Calculate hues
-        const primaryHue = currentDay;
-        const secondaryHue = (primaryHue - 50 + 360) % 360; // Ensure positive
-        const thirdHue = (primaryHue + 50) % 360;
-        
-        // Store colors
+        // Modern, professional color scheme - no more day-based changes
         this.colors = {
-            primary: primaryHue,
-            secondary: secondaryHue,
-            third: thirdHue
+            primary: '#3b82f6',    // Modern blue
+            secondary: '#6366f1',  // Indigo
+            third: '#8b5cf6'       // Purple
         };
         
-        console.log(`Day ${currentDay}: Primary(${primaryHue}°), Secondary(${secondaryHue}°), Third(${thirdHue}°)`);
+        console.log('Fixed color scheme loaded:', this.colors);
     }
 
     // Check if year is leap year
@@ -55,27 +41,14 @@ class DaenylPortfolio {
         return ((year % 4 === 0) && (year % 100 !== 0)) || (year % 400 === 0);
     }
 
-    // Update CSS custom properties with dynamic colors
-    updateColors() {
-        const root = document.documentElement;
-        
-        root.style.setProperty('--primary-hue', this.colors.primary);
-        root.style.setProperty('--secondary-hue', this.colors.secondary);
-        root.style.setProperty('--third-hue', this.colors.third);
-        
-        // Update derived colors
-        root.style.setProperty('--primary-color', `hsl(${this.colors.primary}, 70%, 50%)`);
-        root.style.setProperty('--secondary-color', `hsl(${this.colors.secondary}, 70%, 40%)`);
-        root.style.setProperty('--third-color', `hsl(${this.colors.third}, 70%, 60%)`);
-    }
+    // Colors are now fixed in CSS - no dynamic updates needed
 
     // Start background animations
     startAnimations() {
         // Enhanced vignette movement with lerping
         this.vignetteAnimation();
         
-        // Smooth color transitions
-        this.colorTransitions();
+        // Colors are now fixed - no more color transitions
     }
 
     // Advanced vignette animation with interpolation
@@ -107,32 +80,7 @@ class DaenylPortfolio {
         animate();
     }
 
-    // Smooth color transition effects
-    colorTransitions() {
-        let colorTime = 0;
-        const colorSpeed = 0.002;
-        
-        const animate = () => {
-            colorTime += colorSpeed;
-            
-            // Subtle color variations
-            const primaryVariation = Math.sin(colorTime) * 3;
-            const secondaryVariation = Math.cos(colorTime * 1.2) * 3;
-            const thirdVariation = Math.sin(colorTime * 0.8) * 3;
-            
-            const root = document.documentElement;
-            root.style.setProperty('--primary-color', 
-                `hsl(${this.colors.primary + primaryVariation}, 70%, ${50 + Math.sin(colorTime * 2) * 5}%)`);
-            root.style.setProperty('--secondary-color', 
-                `hsl(${this.colors.secondary + secondaryVariation}, 70%, ${40 + Math.cos(colorTime * 1.5) * 5}%)`);
-            root.style.setProperty('--third-color', 
-                `hsl(${this.colors.third + thirdVariation}, 70%, ${60 + Math.sin(colorTime * 1.8) * 5}%)`);
-            
-            requestAnimationFrame(animate);
-        };
-        
-        animate();
-    }
+    // Colors are now fixed in CSS - no more dynamic color transitions
 
     // Responsive handling
     setupResponsive() {
@@ -218,14 +166,151 @@ class CodeblockManager {
     }
 }
 
+// Showcase manager for displaying codeblocks
+class ShowcaseManager {
+    constructor(portfolio) {
+        this.portfolio = portfolio;
+        this.codeblocks = [];
+        this.loadCodeblocks();
+    }
+
+    async loadCodeblocks() {
+        try {
+            // Wait for DOM to be ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => this.initializeShowcase());
+            } else {
+                this.initializeShowcase();
+            }
+        } catch (error) {
+            console.error('Error loading codeblocks:', error);
+        }
+    }
+
+    async initializeShowcase() {
+        this.grid = document.getElementById('codeblocks-grid');
+        if (!this.grid) {
+            console.error('Codeblocks grid not found');
+            return;
+        }
+
+        // For now, we'll manually define the codeblocks
+        const codeblockConfigs = [
+            {
+                name: 'boids',
+                title: 'Boids Simulation',
+                hasThreeJS: true
+            }
+            // Add more codeblocks here as you create them
+        ];
+
+        for (const config of codeblockConfigs) {
+            await this.loadCodeblock(config);
+        }
+    }
+
+    async loadCodeblock(config) {
+        try {
+            // Load description
+            const descriptionResponse = await fetch(`./codeblocks/${config.name}/description.md`);
+            const description = await descriptionResponse.text();
+
+            // Load script
+            const scriptResponse = await fetch(`./codeblocks/${config.name}/script.js`);
+            const script = await scriptResponse.text();
+
+            const codeblock = {
+                name: config.name,
+                title: config.title || config.name,
+                description: this.parseMarkdown(description),
+                script: script,
+                hasThreeJS: config.hasThreeJS || false
+            };
+
+            this.codeblocks.push(codeblock);
+            this.renderCodeblock(codeblock);
+        } catch (error) {
+            console.error(`Error loading codeblock ${config.name}:`, error);
+        }
+    }
+
+    parseMarkdown(markdown) {
+        // Simple markdown parser for basic formatting
+        return markdown
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/^- (.*$)/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/^(?!<[h|u|l])/gm, '<p>')
+            .replace(/(?<!>)$/gm, '</p>')
+            .replace(/<p><\/p>/g, '')
+            .replace(/<p>(<[h|u])/g, '$1')
+            .replace(/(<\/[h|u].*>)<\/p>/g, '$1');
+    }
+
+    renderCodeblock(codeblock) {
+        if (!this.grid) return;
+
+        const showcaseElement = document.createElement('div');
+        showcaseElement.className = 'codeblock-showcase';
+        showcaseElement.innerHTML = `
+            <div class="codeblock-preview" id="preview-${codeblock.name}">
+                <div class="codeblock-preview-placeholder">
+                    ${codeblock.hasThreeJS ? '🎮 Interactive Demo' : '📄 Code Example'}
+                </div>
+            </div>
+            <div class="codeblock-info">
+                <div class="codeblock-name">${codeblock.title}</div>
+                <div class="codeblock-description">${codeblock.description}</div>
+            </div>
+        `;
+
+        // Add click handler to open in editor
+        showcaseElement.addEventListener('click', () => {
+            this.openInEditor(codeblock);
+        });
+
+        this.grid.appendChild(showcaseElement);
+
+        // Initialize Three.js preview if applicable
+        if (codeblock.hasThreeJS) {
+            this.initializeThreeJSPreview(codeblock.name);
+        }
+    }
+
+    initializeThreeJSPreview(name) {
+        // This will be implemented when we add Three.js
+        const previewElement = document.getElementById(`preview-${name}`);
+        if (previewElement) {
+            // For now, just update the placeholder
+            const placeholder = previewElement.querySelector('.codeblock-preview-placeholder');
+            if (placeholder) {
+                placeholder.innerHTML = '🌐 Three.js Preview<br><small>Click to open in editor</small>';
+            }
+        }
+    }
+
+    openInEditor(codeblock) {
+        // Open the editor with the codeblock
+        const editorUrl = `./editor/?codeblock=${encodeURIComponent(codeblock.name)}`;
+        window.open(editorUrl, '_blank');
+    }
+}
+
 // Initialize the portfolio
 const portfolio = new DaenylPortfolio();
 const codeblockManager = new CodeblockManager();
+const showcaseManager = new ShowcaseManager(portfolio);
 
 // Expose to global scope for future extensions
 window.DaenylPortfolio = {
     portfolio,
     codeblockManager,
+    showcaseManager,
     
     // API for adding codeblocks
     showCode: (code, title) => codeblockManager.addCodeblock(code, title),

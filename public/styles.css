@@ -5,28 +5,51 @@
     box-sizing: border-box;
 }
 
-/* CSS custom properties for dynamic colors */
+/* CSS custom properties for fixed modern colors */
 :root {
-    --primary-hue: 180;
-    --secondary-hue: 130;
-    --third-hue: 230;
-    --primary-color: hsl(var(--primary-hue), 70%, 50%);
-    --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
-    --third-color: hsl(var(--third-hue), 70%, 60%);
+    --primary-color: #3b82f6;      /* Modern blue */
+    --secondary-color: #6366f1;    /* Indigo */
+    --accent-color: #8b5cf6;       /* Purple */
+    
+    /* Background colors */
+    --bg-primary: #0f172a;         /* Very dark blue-gray */
+    --bg-secondary: #1e293b;       /* Dark blue-gray */
+    --bg-tertiary: #334155;        /* Medium blue-gray */
+    --bg-card: #1e293b;           /* Card background */
+    
+    /* Text colors */
+    --text-primary: #f8fafc;       /* Almost white */
+    --text-secondary: #cbd5e1;     /* Light gray */
+    --text-muted: #94a3b8;         /* Muted gray */
+    
+    /* Border colors */
+    --border-primary: #334155;     /* Subtle border */
+    --border-accent: #3b82f6;      /* Accent border */
+    
+    /* State colors */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
 }
+
+/* Import modern fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* Body and html setup */
 html, body {
     height: 100%;
-    overflow: hidden;
-    background: #0a0a0a;
-    color: #ffffff;
-    font-family: 'Courier New', monospace;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    scroll-behavior: smooth;
+    line-height: 1.6;
 }
 
-/* Disable text smoothing for pixelated effect */
+/* Modern text rendering */
 body {
-    -webkit-font-smoothing: none;
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeSpeed;
 }
@@ -50,9 +73,10 @@ body {
     width: 100%;
     height: 100%;
     background: linear-gradient(
-        45deg,
-        var(--secondary-color),
-        var(--third-color)
+        135deg,
+        var(--bg-primary) 0%,
+        var(--bg-secondary) 50%,
+        var(--bg-tertiary) 100%
     );
     animation: gradientShift 8s ease-in-out infinite alternate;
 }
@@ -67,7 +91,7 @@ body {
     background: radial-gradient(
         ellipse at 50% 50%,
         transparent 20%,
-        rgba(0, 0, 0, 0.8) 100%
+        rgba(15, 23, 42, 0.8) 100%
     );
     animation: vignetteMove 12s ease-in-out infinite;
 }
@@ -83,33 +107,160 @@ body {
     width: 100vw;
 }
 
-/* Large pixelated logo text */
+/* Large logo text */
 .logo-text {
     font-size: clamp(4rem, 15vw, 20rem);
-    font-weight: bold;
-    color: transparent;
+    font-weight: 700;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: linear-gradient(
-        45deg,
-        var(--primary-color),
-        var(--secondary-color),
-        var(--third-color)
+        135deg,
+        var(--primary-color) 0%,
+        var(--secondary-color) 50%,
+        var(--accent-color) 100%
     );
     background-size: 200% 200%;
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-align: center;
-    letter-spacing: 0.1em;
+    letter-spacing: -0.04em;
+    line-height: 0.85;
     
-    /* Pixelated text rendering */
-    font-smooth: never;
-    -webkit-font-smoothing: none;
+    /* Modern text rendering */
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeSpeed;
+    text-rendering: optimizeLegibility;
     
-    /* Text acts as mask for background */
-    mix-blend-mode: screen;
     animation: textGlow 6s ease-in-out infinite alternate;
+}
+
+/* Showcase section styles */
+.showcase-section {
+    position: relative;
+    z-index: 10;
+    min-height: 100vh;
+    padding: 80px 40px;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.showcase-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.showcase-title {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    text-align: center;
+    margin-bottom: 60px;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.codeblocks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 40px;
+    padding: 20px 0;
+}
+
+.codeblock-showcase {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.codeblock-showcase:hover {
+    transform: translateY(-5px);
+    border-color: var(--border-accent);
+    box-shadow: 0 12px 24px rgba(59, 130, 246, 0.15);
+}
+
+.codeblock-preview {
+    height: 250px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-primary);
+    position: relative;
+    overflow: hidden;
+}
+
+.codeblock-preview canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.codeblock-preview-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.1),
+        rgba(99, 102, 241, 0.1)
+    );
+}
+
+.codeblock-info {
+    padding: 24px;
+}
+
+.codeblock-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.codeblock-description {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    font-size: 0.875rem;
+}
+
+.codeblock-description h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-family: 'Inter', sans-serif;
+}
+
+.codeblock-description h2,
+.codeblock-description h3 {
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+}
+
+.codeblock-description p {
+    margin-bottom: 10px;
+}
+
+.codeblock-description ul {
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+.codeblock-description li {
+    margin-bottom: 5px;
+}
+
+.codeblock-description strong {
+    color: var(--accent-color);
+    font-weight: 600;
 }
 
 /* Codeblocks container for future features */
@@ -182,48 +333,51 @@ body {
 
 /* Syntax highlighting styles */
 .codeblock-content .keyword {
-    color: hsl(var(--primary-hue), 70%, 60%);
+    color: var(--primary-color);
     font-weight: bold;
 }
 
 .codeblock-content .string {
-    color: hsl(var(--third-hue), 70%, 70%);
+    color: var(--accent-color);
 }
 
 .codeblock-content .comment {
-    color: #888;
+    color: var(--text-muted);
     font-style: italic;
 }
 
 .codeblock-content .number {
-    color: hsl(var(--secondary-hue), 70%, 60%);
+    color: var(--secondary-color);
 }
 
 /* Animations */
 @keyframes gradientShift {
     0% {
         background: linear-gradient(
-            45deg,
-            var(--secondary-color),
-            var(--third-color)
+            135deg,
+            var(--bg-primary) 0%,
+            var(--bg-secondary) 50%,
+            var(--bg-tertiary) 100%
         );
         transform: scale(1) rotate(0deg);
     }
     50% {
         background: linear-gradient(
-            135deg,
-            var(--third-color),
-            var(--primary-color)
+            225deg,
+            var(--bg-secondary) 0%,
+            var(--bg-tertiary) 50%,
+            var(--bg-primary) 100%
         );
-        transform: scale(1.1) rotate(2deg);
+        transform: scale(1.05) rotate(1deg);
     }
     100% {
         background: linear-gradient(
-            225deg,
-            var(--primary-color),
-            var(--secondary-color)
+            315deg,
+            var(--bg-tertiary) 0%,
+            var(--bg-primary) 50%,
+            var(--bg-secondary) 100%
         );
-        transform: scale(1.05) rotate(-1deg);
+        transform: scale(1.02) rotate(-0.5deg);
     }
 }
 
@@ -287,6 +441,15 @@ body {
         letter-spacing: 0.05em;
     }
     
+    .showcase-section {
+        padding: 40px 20px;
+    }
+    
+    .codeblocks-grid {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+    
     .codeblock-frame {
         bottom: 10px;
         right: 10px;
@@ -298,6 +461,15 @@ body {
 @media (max-width: 480px) {
     .logo-text {
         font-size: clamp(2rem, 10vw, 6rem);
+    }
+    
+    .showcase-title {
+        font-size: clamp(1.5rem, 8vw, 2.5rem);
+    }
+    
+    .codeblocks-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
     }
 }
 
