@@ -324,44 +324,202 @@ class ShowcaseManager {
             return;
         }
 
-        // For now, we'll manually define the codeblocks
-        const codeblockConfigs = [
+        // Dynamically discover codeblocks by scanning the codeblocks directory
+        await this.discoverCodeblocks();
+    }
+
+    async discoverCodeblocks() {
+        try {
+            console.log('🔍 Discovering codeblocks...');
+            
+            // Get list of codeblock directories
+            const codeblockNames = await this.getCodeblockDirectories();
+            
+            if (codeblockNames.length === 0) {
+                console.warn('⚠️ No codeblocks found, using fallback');
+                await this.loadFallbackCodeblocks();
+                return;
+            }
+            
+            console.log(`✅ Found ${codeblockNames.length} codeblock(s):`, codeblockNames);
+
+            // Load each discovered codeblock
+            let successCount = 0;
+            for (const name of codeblockNames) {
+                try {
+                    await this.loadCodeblock({ name });
+                    successCount++;
+                } catch (error) {
+                    console.error(`❌ Failed to load ${name}:`, error);
+                }
+            }
+            
+            console.log(`📦 Successfully loaded ${successCount}/${codeblockNames.length} codeblocks`);
+            
+        } catch (error) {
+            console.error('💥 Error discovering codeblocks:', error);
+            // Fallback to manual list if discovery fails
+            await this.loadFallbackCodeblocks();
+        }
+    }
+
+    async getCodeblockDirectories() {
+        // Try to get the list of directories in the codeblocks folder
+        // This approach works by attempting to fetch known codeblocks and checking which exist
+        const potentialCodeblocks = [
+            // Current demos
+            'boids',
+            
+            // Potential future demos
+            'particles',
+            'fractals',
+            'waves',
+            'mandelbrot',
+            'life',
+            'physics',
+            'raytracer',
+            'mesh',
+            'terrain',
+            'fluid',
+            'cloth',
+            'solar-system',
+            'galaxy',
+            'dna',
+            'neural-network',
+            'pathfinding',
+            'sorting',
+            'maze',
+            'cellular-automata',
+            'l-systems',
+            'perlin-noise',
+            'voronoi',
+            'delaunay',
+            'matrix',
+            'fire',
+            'water',
+            'explosion',
+            'lightning',
+            'aurora',
+            'fireworks'
+        ];
+
+        const existingCodeblocks = [];
+        const batchSize = 5; // Check in batches to avoid overwhelming the server
+
+        // Check which codeblocks actually exist by trying to fetch their description
+        for (let i = 0; i < potentialCodeblocks.length; i += batchSize) {
+            const batch = potentialCodeblocks.slice(i, i + batchSize);
+            
+            const promises = batch.map(async (name) => {
+                try {
+                    const response = await fetch(`./codeblocks/${name}/description.md`, {
+                        method: 'HEAD' // Use HEAD request for faster checking
+                    });
+                    return response.ok ? name : null;
+                } catch (error) {
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(promises);
+            existingCodeblocks.push(...results.filter(name => name !== null));
+        }
+
+        return existingCodeblocks.sort(); // Sort alphabetically
+    }
+
+    async loadFallbackCodeblocks() {
+        // Fallback to manual list if auto-discovery fails
+        console.warn('Falling back to manual codeblock list');
+        const fallbackConfigs = [
             {
                 name: 'boids',
                 title: 'Boids Simulation',
                 hasThreeJS: true
             }
-            // Add more codeblocks here as you create them
         ];
 
-        for (const config of codeblockConfigs) {
+        for (const config of fallbackConfigs) {
             await this.loadCodeblock(config);
         }
     }
 
     async loadCodeblock(config) {
         try {
+            const name = config.name;
+            
             // Load description
-            const descriptionResponse = await fetch(`./codeblocks/${config.name}/description.md`);
+            const descriptionResponse = await fetch(`./codeblocks/${name}/description.md`);
+            if (!descriptionResponse.ok) {
+                throw new Error(`Failed to load description for ${name}`);
+            }
             const description = await descriptionResponse.text();
 
             // Load script
-            const scriptResponse = await fetch(`./codeblocks/${config.name}/script.js`);
+            const scriptResponse = await fetch(`./codeblocks/${name}/script.js`);
+            if (!scriptResponse.ok) {
+                throw new Error(`Failed to load script for ${name}`);
+            }
             const script = await scriptResponse.text();
 
+            // Auto-detect properties
+            const hasThreeJS = this.detectThreeJS(script);
+            const title = this.extractTitle(description, name);
+
             const codeblock = {
-                name: config.name,
-                title: config.title || config.name,
+                name: name,
+                title: title,
                 description: this.parseMarkdown(description),
                 script: script,
-                hasThreeJS: config.hasThreeJS || false
+                hasThreeJS: hasThreeJS
             };
 
             this.codeblocks.push(codeblock);
             this.renderCodeblock(codeblock);
+            
+            console.log(`Successfully loaded codeblock: ${name} (ThreeJS: ${hasThreeJS})`);
         } catch (error) {
             console.error(`Error loading codeblock ${config.name}:`, error);
         }
+    }
+
+    // Auto-detect if a script uses Three.js
+    detectThreeJS(script) {
+        const threeJSIndicators = [
+            'THREE.',
+            'new THREE',
+            'scene',
+            'camera',
+            'renderer',
+            'WebGLRenderer',
+            'PerspectiveCamera',
+            'Scene()',
+            'Mesh(',
+            'Geometry',
+            'Material'
+        ];
+
+        return threeJSIndicators.some(indicator => 
+            script.includes(indicator)
+        );
+    }
+
+    // Extract title from markdown description
+    extractTitle(description, fallbackName) {
+        // Look for the first h1 heading
+        const h1Match = description.match(/^#\s+(.+)$/m);
+        if (h1Match) {
+            return h1Match[1].trim();
+        }
+
+        // Look for the first h2 heading if no h1
+        const h2Match = description.match(/^##\s+(.+)$/m);
+        if (h2Match) {
+            return h2Match[1].trim();
+        }
+
+        // Fall back to capitalizing the folder name
+        return fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1);
     }
 
     parseMarkdown(markdown) {
@@ -420,17 +578,22 @@ class ShowcaseManager {
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020617);
 
-            // Create camera
+            // Create camera with proper aspect ratio for the full-width layout
             const camera = new THREE.PerspectiveCamera(
                 75, 
-                previewElement.clientWidth / previewElement.clientHeight, 
+                previewElement.clientWidth / previewElement.clientHeight, // Use actual aspect ratio
                 0.1, 
                 1000
             );
 
-            // Create renderer
+            // Create renderer with full preview dimensions
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(previewElement.clientWidth, previewElement.clientHeight);
+            
+            // Use the actual preview dimensions
+            const width = previewElement.clientWidth;
+            const height = previewElement.clientHeight;
+            
+            renderer.setSize(width, height);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.domElement.style.width = '100%';
             renderer.domElement.style.height = '100%';
@@ -529,11 +692,12 @@ class ShowcaseManager {
                 this.openInEditor(codeblock);
             });
 
-            // Handle resize
+            // Handle resize with proper aspect ratio
             const resizeObserver = new ResizeObserver(() => {
                 const width = previewElement.clientWidth;
                 const height = previewElement.clientHeight;
-                camera.aspect = width / height;
+                
+                camera.aspect = width / height; // Use actual aspect ratio
                 camera.updateProjectionMatrix();
                 renderer.setSize(width, height);
             });

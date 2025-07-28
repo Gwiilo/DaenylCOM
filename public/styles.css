@@ -17,11 +17,11 @@
     --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
     --accent-color: hsl(var(--third-hue), 70%, 60%);
     
-    /* Background colors */
-    --bg-primary: #020617;         /* Much darker blue-gray (2% lightness) */
-    --bg-secondary: #0f172a;       /* Very dark blue-gray */
-    --bg-tertiary: #1e293b;        /* Dark blue-gray */
-    --bg-card: #0f172a;           /* Card background */
+    /* Background colors - now dynamic based on day-of-year hues */
+    --bg-primary: hsl(var(--primary-hue), 30%, 2%);         /* Very dark with primary hue tint */
+    --bg-secondary: hsl(var(--secondary-hue), 25%, 6%);     /* Dark with secondary hue tint */
+    --bg-tertiary: hsl(var(--third-hue), 20%, 12%);        /* Medium dark with third hue tint */
+    --bg-card: hsl(var(--primary-hue), 28%, 7%);           /* Card background with primary hue tint */
     
     /* Text colors */
     --text-primary: #f8fafc;       /* Almost white */
@@ -147,46 +147,54 @@ body {
     position: relative;
     z-index: 10;
     min-height: 100vh;
-    padding: 80px 20px;
+    padding: 0; /* Remove padding to allow full width */
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
+    overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .showcase-container {
-    max-width: 1400px;
-    margin: 0 auto;
+    max-width: none; /* Remove max-width constraint */
+    margin: 0;
     width: 100%;
+    padding: 0; /* Remove padding to allow full width */
 }
 
 .showcase-title {
     font-size: clamp(2rem, 5vw, 3.5rem);
     text-align: center;
-    margin-bottom: 60px;
+    margin-bottom: 30px; /* Reduce margin to save space */
+    padding: 40px 20px 0; /* Add top padding */
     color: var(--text-primary);
     font-weight: 600;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .codeblocks-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 30px;
-    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* Remove margins between items */
+    padding: 0;
     max-width: none;
     margin: 0;
+    width: 100%;
 }
 
 .codeblock-showcase {
     background: var(--bg-card);
     border: 1px solid var(--border-primary);
-    border-radius: 12px;
+    border-radius: 0; /* Remove border radius for full width */
     overflow: hidden;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    aspect-ratio: 1;
+    width: 100vw; /* Full viewport width */
+    height: 150vh; /* Double from 75vh to 150vh */
+    margin: 0;
+    border-left: none;
+    border-right: none;
 }
 
 .codeblock-showcase:hover {
@@ -196,12 +204,12 @@ body {
 }
 
 .codeblock-preview {
-    flex: 3;
     background: var(--bg-primary);
     border-bottom: 1px solid var(--border-primary);
     position: relative;
     overflow: hidden;
-    aspect-ratio: 1;
+    width: 100%;
+    height: 60%; /* Take up 60% of the showcase height */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -279,11 +287,13 @@ body {
 }
 
 .codeblock-info {
-    flex: 1;
-    padding: 20px;
+    padding: 30px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    height: 40%; /* Take up 40% of the showcase height */
+    width: 100%;
+    overflow-y: auto; /* Allow scrolling if content is too long */
 }
 
 .codeblock-name {
@@ -466,6 +476,16 @@ body {
 /* Text glow animation removed - using static gradient */
 
 /* Responsive design */
+@media (min-width: 1200px) {
+    /* No changes needed for large screens - full width layout works */
+}
+
+@media (max-width: 1024px) {
+    .codeblock-showcase {
+        height: 80vh; /* Slightly taller on medium screens */
+    }
+}
+
 @media (max-width: 768px) {
     .logo-text {
         font-size: clamp(2.5rem, 12vw, 8rem);
@@ -473,13 +493,21 @@ body {
     }
     
     .showcase-section {
-        padding: 40px 10px;
+        padding: 0; /* Keep full width */
     }
     
-    .codeblocks-grid {
-        grid-template-columns: 1fr;
-        gap: 20px;
-        padding: 10px 0;
+    .showcase-title {
+        padding: 20px 20px 0; /* Reduce top padding on mobile */
+        margin-bottom: 20px;
+    }
+    
+    .codeblock-showcase {
+        height: 85vh; /* Taller on mobile for better visibility */
+    }
+    
+    .codeblock-info {
+        padding: 20px; /* Reduce padding on mobile */
+        height: 40%; /* Keep same ratio */
     }
     
     .codeblock-frame {
@@ -497,15 +525,16 @@ body {
     
     .showcase-title {
         font-size: clamp(1.5rem, 8vw, 2.5rem);
+        padding: 15px 15px 0;
+        margin-bottom: 15px;
     }
     
-    .codeblocks-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
+    .codeblock-showcase {
+        height: 90vh; /* Even taller on small screens */
     }
     
-    .showcase-section {
-        padding: 30px 5px;
+    .codeblock-info {
+        padding: 15px; /* Even less padding on very small screens */
     }
 }
 

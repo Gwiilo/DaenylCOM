@@ -17,11 +17,11 @@
     --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
     --accent-color: hsl(var(--third-hue), 70%, 60%);
     
-    /* Background colors */
-    --bg-primary: #020617;         /* Much darker blue-gray (2% lightness) */
-    --bg-secondary: #0f172a;       /* Very dark blue-gray */
-    --bg-tertiary: #1e293b;        /* Dark blue-gray */
-    --bg-card: #0f172a;           /* Card background */
+    /* Background colors - now dynamic based on day-of-year hues */
+    --bg-primary: hsl(var(--primary-hue), 30%, 2%);         /* Very dark with primary hue tint */
+    --bg-secondary: hsl(var(--secondary-hue), 25%, 6%);     /* Dark with secondary hue tint */
+    --bg-tertiary: hsl(var(--third-hue), 20%, 12%);        /* Medium dark with third hue tint */
+    --bg-card: hsl(var(--primary-hue), 28%, 7%);           /* Card background with primary hue tint */
     
     /* Text colors */
     --text-primary: #f8fafc;       /* Almost white */
@@ -117,7 +117,7 @@ body {
 .control-btn:hover {
     background: var(--secondary-color);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px hsla(var(--primary-hue), 70%, 50%, 0.3);
 }
 
 .run-btn {
@@ -125,7 +125,7 @@ body {
 }
 
 .run-btn:hover {
-    background: #059669;
+    background: hsl(var(--secondary-hue), 70%, 35%);
 }
 
 .reset-btn {
@@ -206,7 +206,7 @@ body {
 /* Three.js Preview */
 .three-preview {
     flex: 1;
-    background: #000;
+    background: var(--bg-primary);
     position: relative;
     min-height: 0;
 }
