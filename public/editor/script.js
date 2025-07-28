@@ -113,21 +113,39 @@ class ThreeJSEditor {
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
 
-    // Inherit colors from parent site
+    // Inherit colors from parent site (day-based system)
     inheritColors() {
         try {
-            const urlParams = new URLSearchParams(window.location.search);
-            const colors = urlParams.get('colors');
-            if (colors) {
-                const colorData = JSON.parse(decodeURIComponent(colors));
-                const root = document.documentElement;
-                root.style.setProperty('--primary-hue', colorData.primary);
-                root.style.setProperty('--secondary-hue', colorData.secondary);
-                root.style.setProperty('--third-hue', colorData.third);
-            }
+            // Calculate day-based colors same as main site
+            const now = new Date();
+            const start = new Date(now.getFullYear(), 0, 0);
+            const diff = now - start;
+            const oneDay = 1000 * 60 * 60 * 24;
+            const dayOfYear = Math.floor(diff / oneDay);
+            
+            // Ensure we're within 1-365/366 range
+            const currentDay = Math.max(1, Math.min(dayOfYear, this.isLeapYear(now.getFullYear()) ? 366 : 365));
+            
+            // Calculate hues based on day of year
+            const primaryHue = currentDay;
+            const secondaryHue = (primaryHue - 50 + 360) % 360;
+            const thirdHue = (primaryHue + 50) % 360;
+            
+            // Apply to CSS
+            const root = document.documentElement;
+            root.style.setProperty('--primary-hue', primaryHue);
+            root.style.setProperty('--secondary-hue', secondaryHue);
+            root.style.setProperty('--third-hue', thirdHue);
+            
+            console.log(`Editor colors - Day ${currentDay}: Primary(${primaryHue}°), Secondary(${secondaryHue}°), Third(${thirdHue}°)`);
         } catch (error) {
-            console.log('Using default colors');
+            console.log('Using default colors:', error);
         }
+    }
+
+    // Helper function for leap year calculation
+    isLeapYear(year) {
+        return ((year % 4 === 0) && (year % 100 !== 0)) || (year % 400 === 0);
     }
 
     // Execute user code

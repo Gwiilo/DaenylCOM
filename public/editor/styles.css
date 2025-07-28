@@ -5,17 +5,23 @@
     box-sizing: border-box;
 }
 
-/* CSS custom properties for modern colors */
+/* CSS custom properties for dynamic day-based colors */
 :root {
-    --primary-color: #3b82f6;      /* Modern blue */
-    --secondary-color: #6366f1;    /* Indigo */
-    --accent-color: #8b5cf6;       /* Purple */
+    /* Dynamic hues - will be set by JavaScript based on day of year */
+    --primary-hue: 180;           /* Default, will be overridden */
+    --secondary-hue: 130;         /* Default, will be overridden */
+    --third-hue: 230;             /* Default, will be overridden */
+    
+    /* Dynamic colors based on day-of-year hues */
+    --primary-color: hsl(var(--primary-hue), 70%, 50%);
+    --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
+    --accent-color: hsl(var(--third-hue), 70%, 60%);
     
     /* Background colors */
-    --bg-primary: #0f172a;         /* Very dark blue-gray */
-    --bg-secondary: #1e293b;       /* Dark blue-gray */
-    --bg-tertiary: #334155;        /* Medium blue-gray */
-    --bg-card: #1e293b;           /* Card background */
+    --bg-primary: #020617;         /* Much darker blue-gray (2% lightness) */
+    --bg-secondary: #0f172a;       /* Very dark blue-gray */
+    --bg-tertiary: #1e293b;        /* Dark blue-gray */
+    --bg-card: #0f172a;           /* Card background */
     
     /* Text colors */
     --text-primary: #f8fafc;       /* Almost white */
@@ -24,7 +30,7 @@
     
     /* Border colors */
     --border-primary: #334155;     /* Subtle border */
-    --border-accent: #3b82f6;      /* Accent border */
+    --border-accent: var(--primary-color);  /* Dynamic accent border */
     
     /* State colors */
     --success: #10b981;

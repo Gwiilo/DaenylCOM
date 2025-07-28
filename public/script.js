@@ -325,9 +325,12 @@ class ShowcaseManager {
             );
 
             // Create renderer
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(previewElement.clientWidth, previewElement.clientHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.domElement.style.width = '100%';
+            renderer.domElement.style.height = '100%';
+            renderer.domElement.style.display = 'block';
             previewElement.appendChild(renderer.domElement);
 
             // Add controls overlay
@@ -574,8 +577,11 @@ class ShowcaseManager {
                             
                             // Orient mesh in direction of movement
                             if (this.velocity.length() > 0.01) {
-                                const target = this.position.clone().add(this.velocity);
+                                // Create a target point ahead of the boid
+                                const target = new THREE.Vector3().copy(this.position).add(this.velocity.clone().normalize());
                                 this.mesh.lookAt(target);
+                                // Rotate to correct orientation (cone points forward)
+                                this.mesh.rotateX(Math.PI / 2);
                             }
                         }
                     }
