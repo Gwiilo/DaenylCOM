@@ -98,6 +98,7 @@ class IslandGenerator {
         this.maxHeight = 8;
         this.noise = new SimpleNoise(Math.random() * 1000);
         this.isTopDown = true;
+        this.lastTime = 0; // Initialize framerate timing
         
         this.initializeTerrain();
         this.setupLighting();
@@ -682,12 +683,22 @@ class IslandGenerator {
             this.animationId = requestAnimationFrame(() => this.render());
         }
         
-        // Animate sun position
-        this.updateSunPosition();
+        // Proper 60 FPS framerate limiting
+        const currentTime = performance.now();
+        if (!this.lastTime) this.lastTime = 0;
+        const targetFPS = 60;
+        const frameInterval = 1000 / targetFPS;
         
-        // Animate water
-        if (this.waterMesh) {
-            this.waterMesh.material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.1;
+        if (currentTime - this.lastTime >= frameInterval) {
+            // Animate sun position
+            this.updateSunPosition();
+            
+            // Animate water
+            if (this.waterMesh) {
+                this.waterMesh.material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.1;
+            }
+            
+            this.lastTime = currentTime;
         }
         
         renderer.render(scene, camera);
@@ -736,6 +747,7 @@ window.pauseIslands = function() {
 window.resumeIslands = function() {
     if (!islandGenerator.animationId && window.islandGenerator === islandGenerator) {
         console.log('Islands animation resumed');
+        islandGenerator.lastTime = 0; // Reset timing to prevent frame skipping
         islandGenerator.render();
     }
 };

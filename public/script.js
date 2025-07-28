@@ -405,101 +405,129 @@ class ShowcaseManager {
     constructor(portfolio) {
         this.portfolio = portfolio;
         this.codeblocks = [];
-        this.activeAnimations = new Map(); // Track active animations
+        this.currentIndex = 0;
+        this.currentDemo = null; // Track the currently active demo
         this.loadCodeblocks();
     }
     
-    // Pause all other animations except the specified one
-    pauseAllExcept(exceptName = null) {
-        this.activeAnimations.forEach((animationData, name) => {
-            if (name !== exceptName && animationData.isPlaying) {
-                animationData.isPlaying = false;
-                if (animationData.animationId) {
-                    cancelAnimationFrame(animationData.animationId);
-                }
-                // Special handling for specific demos
-                if (name === 'boids' && window.pauseBoids) {
-                    window.pauseBoids();
-                } else if (name === 'islands' && window.pauseIslands) {
-                    window.pauseIslands();
-                }
-                console.log(`Paused demo: ${name}`);
-            }
-        });
-    }
-    
-    // Resume a specific animation
-    resumeAnimation(name) {
-        const animationData = this.activeAnimations.get(name);
-        if (animationData && !animationData.isPlaying) {
-            animationData.isPlaying = true;
-            // Special handling for specific demos
-            if (name === 'boids' && window.resumeBoids) {
-                window.resumeBoids();
-            } else if (name === 'islands' && window.resumeIslands) {
-                window.resumeIslands();
-            } else {
-                animationData.animate();
-            }
-            console.log(`Resumed demo: ${name}`);
+    // Navigate to the next codeblock
+    nextCodeblock() {
+        if (this.currentIndex < this.codeblocks.length - 1) {
+            this.currentIndex++;
+            this.renderCurrentCodeblock();
         }
     }
     
-    // Check if previews are in viewport and manage accordingly
-    checkViewportVisibility() {
-        let mostVisibleDemo = null;
-        let maxVisibleArea = 0;
-        
-        // Find the demo with the largest visible area
-        this.activeAnimations.forEach((animationData, name) => {
-            const previewElement = document.getElementById(`preview-${name}`);
-            if (!previewElement) return;
-            
-            const rect = previewElement.getBoundingClientRect();
-            const windowHeight = window.innerHeight || document.documentElement.clientHeight;
-            const windowWidth = window.innerWidth || document.documentElement.clientWidth;
-            
-            // Calculate visible area
-            const visibleTop = Math.max(0, rect.top);
-            const visibleBottom = Math.min(windowHeight, rect.bottom);
-            const visibleLeft = Math.max(0, rect.left);
-            const visibleRight = Math.min(windowWidth, rect.right);
-            
-            const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-            const visibleWidth = Math.max(0, visibleRight - visibleLeft);
-            const visibleArea = visibleHeight * visibleWidth;
-            
-            // Only consider elements that are at least 30% visible
-            const totalArea = rect.width * rect.height;
-            const visibilityRatio = totalArea > 0 ? visibleArea / totalArea : 0;
-            
-            if (visibilityRatio > 0.3 && visibleArea > maxVisibleArea) {
-                maxVisibleArea = visibleArea;
-                mostVisibleDemo = name;
-            }
-        });
-        
-        // Pause all animations first
-        this.activeAnimations.forEach((animationData, name) => {
-            if (animationData.isPlaying) {
-                animationData.isPlaying = false;
-                if (animationData.animationId) {
-                    cancelAnimationFrame(animationData.animationId);
-                }
-                // Special handling for specific demos
-                if (name === 'boids' && window.pauseBoids) {
-                    window.pauseBoids();
-                } else if (name === 'islands' && window.pauseIslands) {
-                    window.pauseIslands();
-                }
-                console.log(`Paused demo: ${name}`);
-            }
-        });
-        
-        // Resume only the most visible demo
-        if (mostVisibleDemo) {
-            this.resumeAnimation(mostVisibleDemo);
+    // Navigate to the previous codeblock
+    prevCodeblock() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.renderCurrentCodeblock();
         }
+    }
+    
+    // Navigate to a specific codeblock by index
+    goToCodeblock(index) {
+        if (index >= 0 && index < this.codeblocks.length) {
+            this.currentIndex = index;
+            this.renderCurrentCodeblock();
+        }
+    }
+    
+    // Cleanup current demo and render the new one
+    renderCurrentCodeblock() {
+        // Cleanup any existing demo
+        this.cleanupCurrentDemo();
+        
+        if (this.codeblocks.length === 0) return;
+        
+        const codeblock = this.codeblocks[this.currentIndex];
+        this.renderCodeblock(codeblock);
+        this.updateNavigation();
+    }
+    
+    // Cleanup the currently active demo
+    cleanupCurrentDemo() {
+        if (this.currentDemo) {
+            // Cancel any animation frames
+            if (this.currentDemo.animationId) {
+                cancelAnimationFrame(this.currentDemo.animationId);
+            }
+            
+            // Call demo-specific cleanup if it exists
+            if (this.currentDemo.name) {
+                const cleanupFunctionName = `cleanup${this.capitalizeFirstLetter(this.currentDemo.name)}`;
+                if (window[cleanupFunctionName] && typeof window[cleanupFunctionName] === 'function') {
+                    try {
+                        window[cleanupFunctionName]();
+                    } catch (error) {
+                        console.warn(`Error calling ${cleanupFunctionName}:`, error);
+                    }
+                }
+            }
+            
+            // Cleanup Three.js resources
+            if (this.currentDemo.renderer) {
+                this.currentDemo.renderer.dispose();
+            }
+            if (this.currentDemo.scene) {
+                this.currentDemo.scene.clear();
+            }
+            
+            this.currentDemo = null;
+        }
+    }
+    
+    // Update navigation button states
+    updateNavigation() {
+        const prevBtn = document.querySelector('.slideshow-prev');
+        const nextBtn = document.querySelector('.slideshow-next');
+        const counter = document.querySelector('.slideshow-counter');
+        
+        if (prevBtn) {
+            prevBtn.disabled = this.currentIndex === 0;
+            prevBtn.classList.toggle('disabled', this.currentIndex === 0);
+        }
+        
+        if (nextBtn) {
+            nextBtn.disabled = this.currentIndex === this.codeblocks.length - 1;
+            nextBtn.classList.toggle('disabled', this.currentIndex === this.codeblocks.length - 1);
+        }
+        
+        if (counter) {
+            counter.textContent = `${this.currentIndex + 1} / ${this.codeblocks.length}`;
+        }
+    }
+    
+    // Helper function to capitalize first letter for function names
+    capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+    
+    // Toggle pause/resume for current demo
+    toggleCurrentDemo() {
+        if (!this.codeblocks[this.currentIndex]) return;
+        
+        const codeblock = this.codeblocks[this.currentIndex];
+        const pauseBtn = document.querySelector('#pause-demo');
+        
+        if (this.currentDemo && this.currentDemo.isPaused) {
+            // Resume demo
+            this.resumeCurrentDemo();
+            if (pauseBtn) pauseBtn.innerHTML = '⏸️ Pause';
+        } else {
+            // Pause demo
+            this.pauseCurrentDemo();
+            if (pauseBtn) pauseBtn.innerHTML = '▶️ Resume';
+        }
+    }
+    
+    // Open current demo in editor
+    openCurrentInEditor() {
+        if (!this.codeblocks[this.currentIndex]) return;
+        
+        const codeblock = this.codeblocks[this.currentIndex];
+        this.openInEditor(codeblock);
     }
 
     async loadCodeblocks() {
@@ -516,11 +544,60 @@ class ShowcaseManager {
     }
 
     async initializeShowcase() {
-        this.grid = document.getElementById('codeblocks-grid');
-        if (!this.grid) {
-            console.error('Codeblocks grid not found');
+        this.container = document.getElementById('codeblocks-grid');
+        if (!this.container) {
+            console.error('Codeblocks container not found');
             return;
         }
+
+        // Replace the grid with a slideshow container
+        this.container.innerHTML = `
+            <div class="demo-controls">
+                <button class="demo-control-btn pause-btn" id="pause-demo" title="Pause/Resume Demo">⏸️ Pause</button>
+                <button class="demo-control-btn editor-btn" id="open-editor" title="Open in Editor">📝 Editor</button>
+            </div>
+            <div class="codeblock-slideshow">
+                <div class="slideshow-navigation">
+                    <button class="nav-btn slideshow-prev" title="Previous">‹</button>
+                    <div class="nav-counter">
+                        <span class="slideshow-counter">1 / 1</span>
+                    </div>
+                    <button class="nav-btn slideshow-next" title="Next">›</button>
+                </div>
+                <div class="slideshow-content" id="slideshow-content">
+                    <div class="codeblock-loading">
+                        <div class="loading-spinner"></div>
+                        <div>🔍 Discovering demos...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Keyboard hints removed as requested
+
+        // Add event listeners for navigation
+        const prevBtn = this.container.querySelector('.slideshow-prev');
+        const nextBtn = this.container.querySelector('.slideshow-next');
+        const pauseBtn = this.container.querySelector('#pause-demo');
+        const editorBtn = this.container.querySelector('#open-editor');
+        
+        prevBtn.addEventListener('click', () => this.prevCodeblock());
+        nextBtn.addEventListener('click', () => this.nextCodeblock());
+        pauseBtn.addEventListener('click', () => this.toggleCurrentDemo());
+        editorBtn.addEventListener('click', () => this.openCurrentInEditor());
+        
+        // Add keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'textarea') {
+                return; // Don't interfere with form inputs
+            }
+            
+            if (e.key === 'ArrowLeft') {
+                this.prevCodeblock();
+            } else if (e.key === 'ArrowRight') {
+                this.nextCodeblock();
+            }
+        });
 
         // Dynamically discover codeblocks by scanning the codeblocks directory
         await this.discoverCodeblocks();
@@ -553,6 +630,14 @@ class ShowcaseManager {
             }
             
             console.log(`📦 Successfully loaded ${successCount}/${codeblockNames.length} codeblocks`);
+            
+            // Render the first codeblock if any were loaded
+            if (this.codeblocks.length > 0) {
+                this.currentIndex = 0;
+                this.renderCurrentCodeblock();
+            } else {
+                this.showNoCodeblocksMessage();
+            }
             
         } catch (error) {
             console.error('💥 Error discovering codeblocks:', error);
@@ -641,6 +726,14 @@ class ShowcaseManager {
         for (const config of fallbackConfigs) {
             await this.loadCodeblock(config);
         }
+        
+        // Render the first codeblock if any were loaded
+        if (this.codeblocks.length > 0) {
+            this.currentIndex = 0;
+            this.renderCurrentCodeblock();
+        } else {
+            this.showNoCodeblocksMessage();
+        }
     }
 
     async loadCodeblock(config) {
@@ -674,12 +767,25 @@ class ShowcaseManager {
             };
 
             this.codeblocks.push(codeblock);
-            this.renderCodeblock(codeblock);
-            
             console.log(`Successfully loaded codeblock: ${name} (ThreeJS: ${hasThreeJS})`);
         } catch (error) {
             console.error(`Error loading codeblock ${config.name}:`, error);
         }
+    }
+    
+    // Show message when no codeblocks are available
+    showNoCodeblocksMessage() {
+        const content = document.getElementById('slideshow-content');
+        if (content) {
+            content.innerHTML = `
+                <div class="no-codeblocks-message">
+                    <h3>📦 No Demos Available</h3>
+                    <p>Check back later for interactive coding demonstrations</p>
+                </div>
+            `;
+        }
+        
+        this.updateNavigation();
     }
 
     // Auto-detect if a script uses Three.js
@@ -740,33 +846,111 @@ class ShowcaseManager {
     }
 
     renderCodeblock(codeblock) {
-        if (!this.grid) return;
-
-        const showcaseElement = document.createElement('div');
-        showcaseElement.className = 'codeblock-showcase';
-        showcaseElement.innerHTML = `
-            <div class="codeblock-preview" id="preview-${codeblock.name}">
-                <div class="codeblock-preview-placeholder">
-                    ${codeblock.hasThreeJS ? '🎮 Interactive Demo' : '📄 Code Example'}
+        const content = document.getElementById('slideshow-content');
+        
+        if (!content) return;
+        
+        // Create the codeblock content with proper structure matching CSS
+        content.innerHTML = `
+            <div class="codeblock-showcase">
+                <div class="codeblock-preview" id="current-preview">
+                    <div class="codeblock-preview-placeholder">
+                        ${codeblock.hasThreeJS ? '🎮 Interactive Demo Loading...' : '📄 Code Example'}
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-btn play" title="Play">▶️ Play</button>
+                        <button class="action-btn pause" title="Pause" style="display: none;">⏸️ Pause</button>
+                    </div>
                 </div>
-            </div>
-            <div class="codeblock-info">
-                <div class="codeblock-name">${codeblock.title}</div>
-                <div class="codeblock-description">${codeblock.description}</div>
+                <div class="codeblock-info">
+                    <div class="codeblock-name">${codeblock.title}</div>
+                    <div class="codeblock-description">${codeblock.description}</div>
+                </div>
             </div>
         `;
 
-        // Remove the click handler - interactivity will be through buttons only
-        this.grid.appendChild(showcaseElement);
+        // Setup action buttons
+        this.setupActionButtons(codeblock);
 
         // Initialize Three.js preview if applicable
         if (codeblock.hasThreeJS) {
-            this.initializeThreeJSPreview(codeblock.name, codeblock);
+            this.initializeThreeJSPreview(codeblock);
+        }
+    }
+    
+    // Setup action buttons for the current codeblock
+    setupActionButtons(codeblock) {
+        const playBtn = document.querySelector('.action-btn.play');
+        const pauseBtn = document.querySelector('.action-btn.pause');
+        
+        if (playBtn) {
+            playBtn.addEventListener('click', () => {
+                this.resumeCurrentDemo();
+                playBtn.style.display = 'none';
+                if (pauseBtn) pauseBtn.style.display = 'flex';
+            });
+        }
+        
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', () => {
+                this.pauseCurrentDemo();
+                pauseBtn.style.display = 'none';
+                if (playBtn) playBtn.style.display = 'flex';
+            });
+        }
+    }
+    
+    // Pause the current demo
+    pauseCurrentDemo() {
+        if (this.currentDemo && !this.currentDemo.isPaused) {
+            this.currentDemo.isPaused = true;
+            
+            if (this.currentDemo.animationId) {
+                cancelAnimationFrame(this.currentDemo.animationId);
+                this.currentDemo.animationId = null;
+            }
+            
+            // Try to call demo-specific pause function
+            const pauseFunctionName = `pause${this.capitalizeFirstLetter(this.currentDemo.name)}`;
+            if (window[pauseFunctionName] && typeof window[pauseFunctionName] === 'function') {
+                try {
+                    window[pauseFunctionName]();
+                } catch (error) {
+                    console.warn(`Error calling ${pauseFunctionName}:`, error);
+                }
+            }
+            
+            console.log(`Paused demo: ${this.currentDemo.name}`);
+        }
+    }
+    
+    // Resume the current demo
+    resumeCurrentDemo() {
+        if (this.currentDemo && this.currentDemo.isPaused) {
+            this.currentDemo.isPaused = false;
+            
+            // Try to call demo-specific resume function
+            const resumeFunctionName = `resume${this.capitalizeFirstLetter(this.currentDemo.name)}`;
+            if (window[resumeFunctionName] && typeof window[resumeFunctionName] === 'function') {
+                try {
+                    window[resumeFunctionName]();
+                } catch (error) {
+                    console.warn(`Error calling ${resumeFunctionName}:`, error);
+                    // Fall back to built-in animation
+                    if (this.currentDemo.animate) {
+                        this.currentDemo.animate();
+                    }
+                }
+            } else if (this.currentDemo.animate) {
+                this.currentDemo.animate();
+            }
+            
+            console.log(`Resumed demo: ${this.currentDemo.name}`);
         }
     }
 
-    async initializeThreeJSPreview(name, codeblock) {
-        const previewElement = document.getElementById(`preview-${name}`);
+    async initializeThreeJSPreview(codeblock) {
+        const previewElement = document.getElementById('current-preview');
         if (!previewElement || !window.THREE) return;
 
         try {
@@ -777,18 +961,16 @@ class ShowcaseManager {
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020617);
 
-            // Create camera with proper aspect ratio for the full-width layout
+            // Create camera with proper aspect ratio
             const camera = new THREE.PerspectiveCamera(
                 75, 
-                previewElement.clientWidth / previewElement.clientHeight, // Use actual aspect ratio
+                previewElement.clientWidth / previewElement.clientHeight,
                 0.1, 
                 1000
             );
 
-            // Create renderer with full preview dimensions
+            // Create renderer
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            
-            // Use the actual preview dimensions
             const width = previewElement.clientWidth;
             const height = previewElement.clientHeight;
             
@@ -799,110 +981,75 @@ class ShowcaseManager {
             renderer.domElement.style.display = 'block';
             previewElement.appendChild(renderer.domElement);
 
-            // Add controls overlay
-            const controlsOverlay = document.createElement('div');
-            controlsOverlay.className = 'preview-controls';
-            controlsOverlay.innerHTML = `
-                <button class="preview-control-btn play-btn" title="Play/Pause">⏸️</button>
-                <button class="preview-control-btn code-btn" title="View Code">📝</button>
-            `;
-            previewElement.appendChild(controlsOverlay);
-
-            // Load and execute the specific codeblock
-            const response = await fetch(`./codeblocks/${name}/script.js`);
+            // Load and execute the codeblock script
+            const response = await fetch(`./codeblocks/${codeblock.name}/script.js`);
             const codeText = await response.text();
             
-            // Create execution context for the preview
             let animateFunction = null;
-            let isPlaying = true;
             
-            // Execute the full script
             try {
                 // Make globals available
                 window.scene = scene;
                 window.camera = camera;
                 window.renderer = renderer;
                 
-                // Execute the full codeblock script
+                // Execute the codeblock script
                 eval(codeText);
                 
-                // Look for common animation function names
+                // Look for animation function
                 animateFunction = window.render || window.animate || null;
             } catch (error) {
-                console.error(`Error in ${name} preview:`, error);
+                console.error(`Error in ${codeblock.name} preview:`, error);
                 this.showPreviewError(previewElement, error.message);
                 return;
             }
 
-            // Animation loop with proper management
+            // Create animation loop
             let animationId;
             const animate = () => {
-                const animationData = this.activeAnimations.get(name);
-                if (animationData && animationData.isPlaying) {
-                    animationData.animationId = requestAnimationFrame(animate);
+                if (this.currentDemo && this.currentDemo.isPlaying) {
+                    animationId = requestAnimationFrame(animate);
                     
-                    // For scripts that have their own render loops, don't double-render
                     if (!animateFunction) {
                         renderer.render(scene, camera);
                     } else {
                         try {
                             animateFunction();
                         } catch (error) {
-                            console.error(`Animation error in ${name}:`, error);
-                            animationData.isPlaying = false;
+                            console.error(`Animation error in ${codeblock.name}:`, error);
+                            if (this.currentDemo) this.currentDemo.isPlaying = false;
                         }
                     }
                 }
             };
 
-            // Register this animation
-            this.activeAnimations.set(name, {
-                isPlaying: false, // Start paused, will be activated by viewport check
+            // Store demo data
+            this.currentDemo = {
+                name: codeblock.name,
+                isPlaying: true, // Start playing immediately
                 animationId: null,
                 animate: animate,
                 renderer: renderer,
                 scene: scene,
                 camera: camera
-            });
+            };
 
-            // Don't auto-start - let viewport detection handle it
-            console.log(`Registered demo: ${name} (waiting for viewport detection)`);
+            // Start the animation
+            animate();
 
-            // Handle controls
-            const playBtn = controlsOverlay.querySelector('.play-btn');
-            const codeBtn = controlsOverlay.querySelector('.code-btn');
-
-            playBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const animationData = this.activeAnimations.get(name);
-                if (animationData) {
-                    animationData.isPlaying = !animationData.isPlaying;
-                    playBtn.textContent = animationData.isPlaying ? '⏸️' : '▶️';
-                    if (animationData.isPlaying) {
-                        this.pauseAllExcept(name);
-                        animationData.animate();
-                    }
-                }
-            });
-
-            codeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.openInEditor(codeblock);
-            });
-
-            // Handle resize with proper aspect ratio
+            // Handle resize
             const resizeObserver = new ResizeObserver(() => {
                 const width = previewElement.clientWidth;
                 const height = previewElement.clientHeight;
                 
-                camera.aspect = width / height; // Use actual aspect ratio
+                camera.aspect = width / height;
                 camera.updateProjectionMatrix();
                 renderer.setSize(width, height);
             });
             resizeObserver.observe(previewElement);
 
             // Store cleanup function
-            previewElement._cleanup = () => {
+            this.currentDemo.cleanup = () => {
                 if (animationId) cancelAnimationFrame(animationId);
                 resizeObserver.disconnect();
                 renderer.dispose();
@@ -910,7 +1057,7 @@ class ShowcaseManager {
             };
 
         } catch (error) {
-            console.error(`Failed to initialize Three.js preview for ${name}:`, error);
+            console.error(`Failed to initialize Three.js preview for ${codeblock.name}:`, error);
             this.showPreviewError(previewElement, error.message);
         }
     }
@@ -937,46 +1084,6 @@ const portfolio = new DaenylPortfolio();
 const codeblockManager = new CodeblockManager();
 const showcaseManager = new ShowcaseManager(portfolio);
 
-// Set up viewport visibility detection for animations
-let visibilityTimer;
-function throttledVisibilityCheck() {
-    clearTimeout(visibilityTimer);
-    visibilityTimer = setTimeout(() => showcaseManager.checkViewportVisibility(), 100);
-}
-
-window.addEventListener('scroll', throttledVisibilityCheck);
-window.addEventListener('resize', throttledVisibilityCheck);
-
-// Initial visibility check after DOM is fully loaded and rendered
-setTimeout(() => {
-    showcaseManager.checkViewportVisibility();
-    // If no demos are playing, start the first visible one
-    if (showcaseManager.activeAnimations.size > 0) {
-        let hasPlayingDemo = false;
-        showcaseManager.activeAnimations.forEach(animData => {
-            if (animData.isPlaying) hasPlayingDemo = true;
-        });
-        
-        if (!hasPlayingDemo) {
-            // Find the first demo in viewport and start it
-            showcaseManager.activeAnimations.forEach((animData, name) => {
-                const previewElement = document.getElementById(`preview-${name}`);
-                if (previewElement) {
-                    const rect = previewElement.getBoundingClientRect();
-                    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
-                    const isInViewport = rect.top < windowHeight && rect.bottom > 0;
-                    
-                    if (isInViewport && !hasPlayingDemo) {
-                        console.log(`Auto-starting demo: ${name}`);
-                        showcaseManager.resumeAnimation(name);
-                        hasPlayingDemo = true;
-                    }
-                }
-            });
-        }
-    }
-}, 2000); // Longer delay to ensure everything is loaded
-
 // Expose to global scope for future extensions
 window.DaenylPortfolio = {
     portfolio,
@@ -995,7 +1102,12 @@ window.DaenylPortfolio = {
         if (secondary !== undefined) portfolio.colors.secondary = secondary;
         if (third !== undefined) portfolio.colors.third = third;
         portfolio.updateColors();
-    }
+    },
+    
+    // API for slideshow navigation
+    nextDemo: () => showcaseManager.nextCodeblock(),
+    prevDemo: () => showcaseManager.prevCodeblock(),
+    goToDemo: (index) => showcaseManager.goToCodeblock(index)
 };
 
 // Performance monitoring
