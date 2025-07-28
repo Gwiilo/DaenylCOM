@@ -1,0 +1,318 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* CSS custom properties for dynamic colors */
+:root {
+    --primary-hue: 180;
+    --secondary-hue: 130;
+    --third-hue: 230;
+    --primary-color: hsl(var(--primary-hue), 70%, 50%);
+    --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
+    --third-color: hsl(var(--third-hue), 70%, 60%);
+}
+
+/* Body and html setup */
+html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a0a;
+    color: #ffffff;
+    font-family: 'Courier New', monospace;
+}
+
+/* Disable text smoothing for pixelated effect */
+body {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeSpeed;
+}
+
+/* Animated background container */
+.animated-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    overflow: hidden;
+}
+
+/* Gradient layer */
+.gradient-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        45deg,
+        var(--secondary-color),
+        var(--third-color)
+    );
+    animation: gradientShift 8s ease-in-out infinite alternate;
+}
+
+/* Vignette layer */
+.vignette-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+        ellipse at 50% 50%,
+        transparent 20%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
+    animation: vignetteMove 12s ease-in-out infinite;
+}
+
+/* Main content container */
+.main-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Large pixelated logo text */
+.logo-text {
+    font-size: clamp(4rem, 15vw, 20rem);
+    font-weight: bold;
+    color: transparent;
+    background: linear-gradient(
+        45deg,
+        var(--primary-color),
+        var(--secondary-color),
+        var(--third-color)
+    );
+    background-size: 200% 200%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    letter-spacing: 0.1em;
+    
+    /* Pixelated text rendering */
+    font-smooth: never;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeSpeed;
+    
+    /* Text acts as mask for background */
+    mix-blend-mode: screen;
+    animation: textGlow 6s ease-in-out infinite alternate;
+}
+
+/* Codeblocks container for future features */
+.codeblocks-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 100;
+}
+
+.codeblock-frame {
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid var(--primary-color);
+    border-radius: 8px;
+    padding: 0;
+    min-width: 300px;
+    max-width: 500px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    margin-bottom: 10px;
+}
+
+.codeblock-header {
+    background: rgba(var(--primary-hue), 70%, 50%, 0.2);
+    padding: 8px 15px;
+    border-bottom: 1px solid var(--primary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px 8px 0 0;
+}
+
+.codeblock-title {
+    color: var(--primary-color);
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+.codeblock-close {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.codeblock-close:hover {
+    background: var(--primary-color);
+    color: #000;
+}
+
+.codeblock-content {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: #ffffff;
+    white-space: pre-wrap;
+    padding: 15px;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Syntax highlighting styles */
+.codeblock-content .keyword {
+    color: hsl(var(--primary-hue), 70%, 60%);
+    font-weight: bold;
+}
+
+.codeblock-content .string {
+    color: hsl(var(--third-hue), 70%, 70%);
+}
+
+.codeblock-content .comment {
+    color: #888;
+    font-style: italic;
+}
+
+.codeblock-content .number {
+    color: hsl(var(--secondary-hue), 70%, 60%);
+}
+
+/* Animations */
+@keyframes gradientShift {
+    0% {
+        background: linear-gradient(
+            45deg,
+            var(--secondary-color),
+            var(--third-color)
+        );
+        transform: scale(1) rotate(0deg);
+    }
+    50% {
+        background: linear-gradient(
+            135deg,
+            var(--third-color),
+            var(--primary-color)
+        );
+        transform: scale(1.1) rotate(2deg);
+    }
+    100% {
+        background: linear-gradient(
+            225deg,
+            var(--primary-color),
+            var(--secondary-color)
+        );
+        transform: scale(1.05) rotate(-1deg);
+    }
+}
+
+@keyframes vignetteMove {
+    0% {
+        background: radial-gradient(
+            ellipse at 30% 30%,
+            transparent 15%,
+            rgba(0, 0, 0, 0.7) 80%
+        );
+    }
+    25% {
+        background: radial-gradient(
+            ellipse at 70% 40%,
+            transparent 20%,
+            rgba(0, 0, 0, 0.8) 85%
+        );
+    }
+    50% {
+        background: radial-gradient(
+            ellipse at 60% 70%,
+            transparent 18%,
+            rgba(0, 0, 0, 0.75) 90%
+        );
+    }
+    75% {
+        background: radial-gradient(
+            ellipse at 40% 60%,
+            transparent 22%,
+            rgba(0, 0, 0, 0.85) 95%
+        );
+    }
+    100% {
+        background: radial-gradient(
+            ellipse at 30% 30%,
+            transparent 15%,
+            rgba(0, 0, 0, 0.7) 80%
+        );
+    }
+}
+
+@keyframes textGlow {
+    0% {
+        background-position: 0% 50%;
+        filter: brightness(1);
+    }
+    50% {
+        background-position: 100% 50%;
+        filter: brightness(1.2);
+    }
+    100% {
+        background-position: 200% 50%;
+        filter: brightness(1.1);
+    }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .logo-text {
+        font-size: clamp(2.5rem, 12vw, 8rem);
+        letter-spacing: 0.05em;
+    }
+    
+    .codeblock-frame {
+        bottom: 10px;
+        right: 10px;
+        max-width: calc(100vw - 20px);
+        min-width: 280px;
+    }
+}
+
+@media (max-width: 480px) {
+    .logo-text {
+        font-size: clamp(2rem, 10vw, 6rem);
+    }
+}
+
+/* Performance optimizations */
+.animated-background,
+.gradient-layer,
+.vignette-layer {
+    will-change: transform, background;
+}
+
+.logo-text {
+    will-change: background-position, filter;
+}
+
+/* Ensure smooth transitions */
+* {
+    transition: background-color 0.3s ease;
+}
