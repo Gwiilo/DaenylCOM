@@ -93,7 +93,7 @@ class SimpleNoise {
 class IslandGenerator {
     constructor() {
         this.size = 100; // 100x100 grid
-        this.seaLevel = 0;
+        this.seaLevel = 0.25; // Set sea level to 0.25 as requested
         this.maxHeight = 8;
         this.noise = new SimpleNoise(Math.random() * 1000);
         this.isTopDown = true;
@@ -142,20 +142,32 @@ class IslandGenerator {
                 const x = (ix / widthSegments) * width - width / 2;
                 const z = (iy / heightSegments) * height - height / 2;
                 
-                // Simple 2D noise for height
-                let terrainHeight = this.noise.fractalNoise2d(x, z, 6);
-                
-                // Scale height
-                terrainHeight = (terrainHeight + 1) * 0.5; // Normalize to 0-1
-                terrainHeight = terrainHeight * 20; // Make it tall!
-                
-                // Distance from center for island shape
+                // Distance from center for island shape calculations
                 const distance = Math.sqrt(x * x + z * z);
-                const maxDistance = this.size * 0.4;
-                const falloff = Math.max(0, 1 - (distance / maxDistance));
+                const maxDistance = this.size * 0.6; // Larger area for islands
+                const normalizedDistance = Math.min(distance / maxDistance, 1.0);
                 
-                // Apply island falloff
-                terrainHeight *= falloff * falloff;
+                // Enhanced 2D noise with distance-based displacement
+                let terrainHeight = this.noise.fractalNoise2d(x, z, 8); // More octaves for detail
+                
+                // Distance-based noise displacement - much more effective at edges
+                const displacementMultiplier = 1.0 + normalizedDistance * 4.0; // 1x at center, 5x at edges
+                terrainHeight *= displacementMultiplier;
+                
+                // Scale height more aggressively
+                terrainHeight = (terrainHeight + 1) * 0.5; // Normalize to 0-1
+                terrainHeight = terrainHeight * 15; // Increase base height variation
+                
+                const falloff = Math.max(0, 1 - normalizedDistance);
+                
+                // Much weaker falloff to allow mini islands and natural shapes
+                const weakFalloff = Math.pow(falloff, 0.3); // Less aggressive falloff
+                
+                // Combine noise-driven height with gentle falloff
+                terrainHeight = terrainHeight * (0.7 + weakFalloff * 0.3); // 70% noise, 30% falloff
+                
+                // Ensure minimum sea level
+                terrainHeight = Math.max(terrainHeight, 0);
                 
                 // Correct order: X, Y (height), Z for horizontal terrain
                 vertices.push(x, terrainHeight, z);
@@ -208,28 +220,30 @@ class IslandGenerator {
     getTerrainColor(height, distance, maxDistance) {
         let color = new THREE.Color();
         
-        if (height < 1) {
-            // Beach/sand
-            color.setHSL(0.12, 0.4, 0.7);
-        } else if (height < 5) {
+        // Sharp, distinct biome colors with no blending
+        if (height <= this.seaLevel + 0.1) {
+            // Beach/sand - only very close to water
+            color.setHex(0xF4E4BC); // Sandy beige
+        } else if (height < 2) {
             // Grass/lowlands
-            color.setHSL(0.25, 0.8, 0.4);
-        } else if (height < 10) {
+            color.setHex(0x4A7C2A); // Rich green
+        } else if (height < 5) {
             // Forest
-            color.setHSL(0.2, 0.9, 0.3);
-        } else if (height < 15) {
+            color.setHex(0x2D5016); // Dark forest green
+        } else if (height < 8) {
             // Mountains
-            color.setHSL(0.08, 0.6, 0.4);
+            color.setHex(0x8B7355); // Brown mountain
         } else {
             // Snow peaks
-            color.setHSL(0, 0, 0.9);
+            color.setHex(0xFFFFFF); // Pure white snow
         }
         
         return color;
     }
 
     addWater() {
-        const waterGeometry = new THREE.PlaneGeometry(this.size * 1.5, this.size * 1.5);
+        // Water same size as terrain (not 1.5x larger)
+        const waterGeometry = new THREE.PlaneGeometry(this.size, this.size);
         const waterMaterial = new THREE.MeshLambertMaterial({ 
             color: 0x006994,
             transparent: true,
@@ -238,7 +252,7 @@ class IslandGenerator {
         
         this.waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
         this.waterMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-        this.waterMesh.position.y = this.seaLevel - 0.1;
+        this.waterMesh.position.y = this.seaLevel; // Match exact sea level
         this.terrainGroup.add(this.waterMesh);
     }
 
@@ -247,11 +261,36 @@ class IslandGenerator {
         const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
         scene.add(ambientLight);
 
-        // Directional light (sun)
+        // Directional light (sun) - positioned at 135 degrees and animated
         this.directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        this.directionalLight.position.set(10, 10, 5);
         this.directionalLight.castShadow = true;
+        
+        // Initial position at 135 degrees (3/4 around from positive X axis)
+        this.sunAngle = Math.PI * 3/4; // 135 degrees in radians
+        this.sunDistance = 50;
+        this.sunHeight = 35; // Height above terrain
+        
+        this.updateSunPosition();
         scene.add(this.directionalLight);
+    }
+    
+    updateSunPosition() {
+        // Rotate sun around the terrain every 6 minutes (360 seconds)
+        const time = Date.now() * 0.001; // Current time in seconds
+        const rotationSpeed = (2 * Math.PI) / 360; // One full rotation every 6 minutes (360 seconds)
+        
+        this.sunAngle += rotationSpeed * (1/60); // Adjust for frame rate
+        
+        // Position sun in circular orbit
+        this.directionalLight.position.set(
+            Math.cos(this.sunAngle) * this.sunDistance,
+            this.sunHeight,
+            Math.sin(this.sunAngle) * this.sunDistance
+        );
+        
+        // Always point toward terrain center
+        this.directionalLight.target.position.set(0, 0, 0);
+        this.directionalLight.target.updateMatrixWorld();
     }
 
     setupCamera() {
@@ -451,6 +490,9 @@ class IslandGenerator {
         if (window.islandGenerator === this) {
             this.animationId = requestAnimationFrame(() => this.render());
         }
+        
+        // Animate sun position
+        this.updateSunPosition();
         
         // Animate water
         if (this.waterMesh) {
