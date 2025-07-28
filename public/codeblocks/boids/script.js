@@ -14,8 +14,8 @@ class Boid {
             (Math.random() - 0.5) * 2
         );
         this.acceleration = new THREE.Vector3();
-        this.maxForce = 0.03;
-        this.maxSpeed = 2;
+        this.maxForce = 0.05; // Increased from 0.03
+        this.maxSpeed = 3.5;  // Increased from 2
         
         // Create visual representation
         this.geometry = new THREE.ConeGeometry(0.1, 0.3, 4);
@@ -25,14 +25,19 @@ class Boid {
         this.mesh = new THREE.Mesh(this.geometry, this.material);
         this.mesh.position.copy(this.position);
         
+        // For smooth orientation interpolation
+        this.targetRotation = new THREE.Quaternion();
+        this.mesh.quaternion.copy(this.targetRotation);
+        
         scene.add(this.mesh);
     }
     
-    // Update color based on position (top-down color wheel)
+    // Update color based on position (linear gradient)
     updateColor() {
-        const angle = Math.atan2(this.position.z, this.position.x);
-        const hue = (angle + Math.PI) / (2 * Math.PI); // Normalize to 0-1
-        this.material.color.setHSL(hue, 0.7, 0.6);
+        // Linear color progression across the X axis
+        const normalizedX = (this.position.x + 8) / 16; // Normalize -8 to 8 range to 0-1
+        const hue = Math.max(0, Math.min(1, normalizedX)); // Clamp to 0-1
+        this.material.color.setHSL(hue * 0.8, 0.7, 0.6); // 0.8 to avoid full red wrap-around
     }
     
     // Apply flocking rules
@@ -45,7 +50,7 @@ class Boid {
         sep.multiplyScalar(1.5);
         ali.multiplyScalar(1.0);
         coh.multiplyScalar(1.0);
-        boundary.multiplyScalar(2.0); // Strong boundary avoidance
+        boundary.multiplyScalar(0.2); // Reduced from 2.0 to 0.2 (90% reduction)
         
         this.acceleration.add(sep);
         this.acceleration.add(ali);
@@ -180,7 +185,7 @@ class Boid {
     update() {
         this.velocity.add(this.acceleration);
         this.velocity.clampLength(0, this.maxSpeed);
-        this.position.add(this.velocity.clone().multiplyScalar(0.016)); // ~60fps timing
+        this.position.add(this.velocity.clone().multiplyScalar(1/60)); // Proper 60 FPS timing
         this.acceleration.multiplyScalar(0);
         
         // Update mesh position
@@ -189,18 +194,25 @@ class Boid {
         // Update color based on position
         this.updateColor();
         
-        // Orient mesh in direction of movement (fixed orientation)
+        // Smooth orientation interpolation
         if (this.velocity.length() > 0.01) {
             const target = new THREE.Vector3().copy(this.position).add(this.velocity.clone().normalize());
-            this.mesh.lookAt(target);
-            this.mesh.rotateX(Math.PI / 2); // Correct cone orientation
+            
+            // Create temporary object to calculate target rotation
+            const tempObject = new THREE.Object3D();
+            tempObject.position.copy(this.position);
+            tempObject.lookAt(target);
+            tempObject.rotateX(Math.PI / 2); // Correct cone orientation
+            
+            // Lerp to target rotation smoothly
+            this.mesh.quaternion.slerp(tempObject.quaternion, 0.1);
         }
     }
 }
 
 // Initialize boids
 const boids = [];
-const numBoids = 200; // Reasonable number for smooth performance
+const numBoids = 200;
 
 for (let i = 0; i < numBoids; i++) {
     boids.push(new Boid());
@@ -292,14 +304,18 @@ renderer.domElement.addEventListener('mousemove', (event) => {
     mouseTarget = raycaster.ray.at(distance, new THREE.Vector3());
 });
 
-// Animation loop with framerate control
+// Animation loop with proper 60 FPS limiting
 let lastTime = 0;
 const targetFPS = 60;
-const frameTime = 1000 / targetFPS;
+const frameInterval = 1000 / targetFPS;
+let isVisible = true;
+let animationId = null;
 
 function animate(currentTime = 0) {
-    // Framerate limiting
-    if (currentTime - lastTime >= frameTime) {
+    // Don't check isVisible here - let the main showcase manager control this
+    
+    // Proper framerate limiting
+    if (currentTime - lastTime >= frameInterval) {
         // Update each boid
         for (let boid of boids) {
             boid.flock(boids);
@@ -324,13 +340,29 @@ function animate(currentTime = 0) {
 console.log(`Created ${numBoids} boids`);
 console.log('Move your mouse to attract the flock!');
 
-// Render loop with deltaTime for smooth animation
+// Render loop - simplified, let showcase manager control start/stop
 function render(currentTime = 0) {
-    requestAnimationFrame(render);
-    
+    animationId = requestAnimationFrame(render);
     animate(currentTime);
     renderer.render(scene, camera);
 }
 
-// Start the animation
+// Expose control functions for the showcase manager
+window.pauseBoids = function() {
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+        console.log('Boids animation paused');
+    }
+};
+
+window.resumeBoids = function() {
+    if (!animationId) {
+        console.log('Boids animation resumed');
+        render();
+    }
+};
+
+// Remove individual viewport detection - let main manager handle this
+// Start the animation (will be controlled by showcase manager)
 render();

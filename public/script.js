@@ -197,7 +197,111 @@ class ShowcaseManager {
     constructor(portfolio) {
         this.portfolio = portfolio;
         this.codeblocks = [];
+        this.activeAnimations = new Map(); // Track active animations
         this.loadCodeblocks();
+    }
+    
+    // Pause all other animations except the specified one
+    pauseAllExcept(exceptName = null) {
+        this.activeAnimations.forEach((animationData, name) => {
+            if (name !== exceptName && animationData.isPlaying) {
+                animationData.isPlaying = false;
+                if (animationData.animationId) {
+                    cancelAnimationFrame(animationData.animationId);
+                }
+                // Special handling for boids
+                if (name === 'boids' && window.pauseBoids) {
+                    window.pauseBoids();
+                }
+                console.log(`Paused demo: ${name}`);
+            }
+        });
+    }
+    
+    // Resume a specific animation
+    resumeAnimation(name) {
+        const animationData = this.activeAnimations.get(name);
+        if (animationData && !animationData.isPlaying) {
+            animationData.isPlaying = true;
+            // Special handling for boids
+            if (name === 'boids' && window.resumeBoids) {
+                window.resumeBoids();
+            } else {
+                animationData.animate();
+            }
+            console.log(`Resumed demo: ${name}`);
+        }
+    }
+    
+    // Check if previews are in viewport and manage accordingly
+    checkViewportVisibility() {
+        let hasPlayingDemo = false;
+        let firstVisibleDemo = null;
+        
+        // First pass: check what's visible and what's playing
+        this.activeAnimations.forEach((animationData, name) => {
+            const previewElement = document.getElementById(`preview-${name}`);
+            if (!previewElement) return;
+            
+            const rect = previewElement.getBoundingClientRect();
+            const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+            const windowWidth = window.innerWidth || document.documentElement.clientWidth;
+            
+            const isInViewport = (
+                rect.top < windowHeight &&
+                rect.bottom > 0 &&
+                rect.left < windowWidth &&
+                rect.right > 0
+            );
+            
+            if (isInViewport && !firstVisibleDemo) {
+                firstVisibleDemo = name;
+            }
+            
+            if (animationData.isPlaying) {
+                hasPlayingDemo = true;
+                if (!isInViewport) {
+                    // Stop if out of view
+                    animationData.isPlaying = false;
+                    if (animationData.animationId) {
+                        cancelAnimationFrame(animationData.animationId);
+                    }
+                    // Special handling for boids
+                    if (name === 'boids' && window.pauseBoids) {
+                        window.pauseBoids();
+                    }
+                    console.log(`Paused demo (out of view): ${name}`);
+                }
+            }
+        });
+        
+        // If no demo is playing and we have a visible one, start it
+        if (!hasPlayingDemo && firstVisibleDemo) {
+            this.resumeAnimation(firstVisibleDemo);
+        }
+        
+        // Second pass: handle viewport changes for visible demos
+        this.activeAnimations.forEach((animationData, name) => {
+            const previewElement = document.getElementById(`preview-${name}`);
+            if (!previewElement) return;
+            
+            const rect = previewElement.getBoundingClientRect();
+            const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+            const windowWidth = window.innerWidth || document.documentElement.clientWidth;
+            
+            const isInViewport = (
+                rect.top < windowHeight &&
+                rect.bottom > 0 &&
+                rect.left < windowWidth &&
+                rect.right > 0
+            );
+            
+            if (isInViewport && !animationData.isPlaying && name === firstVisibleDemo) {
+                // This is the priority visible demo
+                this.pauseAllExcept(name);
+                this.resumeAnimation(name);
+            }
+        });
     }
 
     async loadCodeblocks() {
@@ -370,18 +474,19 @@ class ShowcaseManager {
                 return;
             }
 
-            // Animation loop
+            // Animation loop with proper management
             let animationId;
             const animate = () => {
-                if (isPlaying) {
-                    animationId = requestAnimationFrame(animate);
+                const animationData = this.activeAnimations.get(name);
+                if (animationData && animationData.isPlaying) {
+                    animationData.animationId = requestAnimationFrame(animate);
                     
                     if (animateFunction) {
                         try {
                             animateFunction();
                         } catch (error) {
                             console.error(`Animation error in ${name}:`, error);
-                            isPlaying = false;
+                            animationData.isPlaying = false;
                         }
                     }
                     
@@ -389,8 +494,18 @@ class ShowcaseManager {
                 }
             };
 
-            // Start animation
-            animate();
+            // Register this animation
+            this.activeAnimations.set(name, {
+                isPlaying: false, // Start paused, will be activated by viewport check
+                animationId: null,
+                animate: animate,
+                renderer: renderer,
+                scene: scene,
+                camera: camera
+            });
+
+            // Don't auto-start - let viewport detection handle it
+            console.log(`Registered demo: ${name} (waiting for viewport detection)`);
 
             // Handle controls
             const playBtn = controlsOverlay.querySelector('.play-btn');
@@ -398,9 +513,15 @@ class ShowcaseManager {
 
             playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                isPlaying = !isPlaying;
-                playBtn.textContent = isPlaying ? '⏸️' : '▶️';
-                if (isPlaying) animate();
+                const animationData = this.activeAnimations.get(name);
+                if (animationData) {
+                    animationData.isPlaying = !animationData.isPlaying;
+                    playBtn.textContent = animationData.isPlaying ? '⏸️' : '▶️';
+                    if (animationData.isPlaying) {
+                        this.pauseAllExcept(name);
+                        animationData.animate();
+                    }
+                }
             });
 
             codeBtn.addEventListener('click', (e) => {
@@ -478,6 +599,46 @@ class ShowcaseManager {
 const portfolio = new DaenylPortfolio();
 const codeblockManager = new CodeblockManager();
 const showcaseManager = new ShowcaseManager(portfolio);
+
+// Set up viewport visibility detection for animations
+let visibilityTimer;
+function throttledVisibilityCheck() {
+    clearTimeout(visibilityTimer);
+    visibilityTimer = setTimeout(() => showcaseManager.checkViewportVisibility(), 150);
+}
+
+window.addEventListener('scroll', throttledVisibilityCheck);
+window.addEventListener('resize', throttledVisibilityCheck);
+
+// Initial visibility check after DOM is fully loaded and rendered
+setTimeout(() => {
+    showcaseManager.checkViewportVisibility();
+    // If no demos are playing, start the first visible one
+    if (showcaseManager.activeAnimations.size > 0) {
+        let hasPlayingDemo = false;
+        showcaseManager.activeAnimations.forEach(animData => {
+            if (animData.isPlaying) hasPlayingDemo = true;
+        });
+        
+        if (!hasPlayingDemo) {
+            // Find the first demo in viewport and start it
+            showcaseManager.activeAnimations.forEach((animData, name) => {
+                const previewElement = document.getElementById(`preview-${name}`);
+                if (previewElement) {
+                    const rect = previewElement.getBoundingClientRect();
+                    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+                    const isInViewport = rect.top < windowHeight && rect.bottom > 0;
+                    
+                    if (isInViewport && !hasPlayingDemo) {
+                        console.log(`Auto-starting demo: ${name}`);
+                        showcaseManager.resumeAnimation(name);
+                        hasPlayingDemo = true;
+                    }
+                }
+            });
+        }
+    }
+}, 2000); // Longer delay to ensure everything is loaded
 
 // Expose to global scope for future extensions
 window.DaenylPortfolio = {
