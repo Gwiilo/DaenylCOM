@@ -322,17 +322,17 @@ class IslandGenerator {
         
         // Switch to orthographic camera for top-down view
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = this.size;
+        const frustumSize = this.size * 0.6; // Scale frustum to show full island
         
         camera.left = -frustumSize * aspect / 2;
         camera.right = frustumSize * aspect / 2;
         camera.top = frustumSize / 2;
         camera.bottom = -frustumSize / 2;
         camera.near = 0.1;
-        camera.far = 1000;
+        camera.far = 2000;
         
-        // Look down from above at the XZ plane
-        camera.position.set(0, 50, 0);
+        // Look down from much higher up to see the full island
+        camera.position.set(0, this.size * 0.5, 0); // Position camera at 2x world size height
         camera.lookAt(0, 0, 0);
         camera.updateProjectionMatrix();
     }
