@@ -16,6 +16,13 @@ let isDragging = false;
 let dragTarget = new THREE.Vector3();
 let lastDragPosition = new THREE.Vector3();
 
+// Cutting system variables
+let cuttingStartPoint = null;
+let cuttingEndPoint = null;
+let cuttingPath = [];
+let cuttingLine = null;
+let isDrawingCut = false;
+
 // Physics properties
 const gravity = -9.81;
 const timeStep = 1/60;
@@ -282,23 +289,22 @@ function onMouseDown(event) {
         return;
     }
     
-    // Check for object intersection
-    const intersects = raycaster.intersectObjects(objects, true);
-    
-    if (intersects.length > 0) {
-        selectedObject = intersects[0].object;
-        isDragging = true;
+    if (cuttingMode) {
+        // Start drawing cutting line
+        startCuttingLine();
+    } else {
+        // Check for object intersection for dragging
+        const intersects = raycaster.intersectObjects(objects, true);
         
-        // Find the root object if it's part of a group
-        while (selectedObject.parent && selectedObject.parent.userData && selectedObject.parent.userData.physics) {
-            selectedObject = selectedObject.parent;
-        }
-        
-        if (cuttingMode) {
-            cutObject(selectedObject, intersects[0].point);
-            selectedObject = null;
-            isDragging = false;
-        } else {
+        if (intersects.length > 0) {
+            selectedObject = intersects[0].object;
+            isDragging = true;
+            
+            // Find the root object if it's part of a group
+            while (selectedObject.parent && selectedObject.parent.userData && selectedObject.parent.userData.physics) {
+                selectedObject = selectedObject.parent;
+            }
+            
             // Setup enhanced dragging with physics-based movement
             const intersectionPoint = intersects[0].point;
             dragPlane.setFromNormalAndCoplanarPoint(
@@ -342,6 +348,10 @@ function onMouseMove(event) {
         
         window.sunLight.position.setFromSpherical(spherical);
         
+    } else if (cuttingMode && isDrawingCut) {
+        // Continue drawing cutting line
+        updateCuttingLine();
+        
     } else if (selectedObject && !cuttingMode && isDragging) {
         raycaster.setFromCamera(mouse, camera);
         
@@ -353,6 +363,11 @@ function onMouseMove(event) {
 }
 
 function onMouseUp(event) {
+    if (cuttingMode && isDrawingCut) {
+        // Finish cutting line and perform the cut
+        finishCuttingLine();
+    }
+    
     // Release dragged object
     if (selectedObject && selectedObject.userData.physics) {
         selectedObject.userData.physics.isBeingDragged = false;
@@ -369,9 +384,14 @@ function onRightClick(event) {
     cuttingMode = !cuttingMode;
     renderer.domElement.style.cursor = cuttingMode ? 'crosshair' : 'default';
     
+    // Clear any existing cutting line when switching modes
+    if (!cuttingMode) {
+        clearCuttingLine();
+    }
+    
     // Show cutting mode status
     if (cuttingMode) {
-        console.log('🔪 Cutting mode enabled - click objects to slice them!');
+        console.log('🔪 Cutting mode enabled - drag across objects to slice them!');
     } else {
         console.log('✋ Dragging mode enabled - click and drag objects!');
     }
@@ -387,98 +407,604 @@ function onKeyDown(event) {
         case 'Space':
             resetScene();
             break;
+        case 'Escape':
+            if (cuttingMode) {
+                clearCuttingLine();
+            }
+            break;
     }
 }
 
-function cutObject(object, cutPoint) {
-    if (!object.userData.physics) return;
+// Advanced cutting system functions
+function startCuttingLine() {
+    // Start with current mouse position
+    cuttingPath = [];
+    isDrawingCut = true;
+    
+    // Add first point
+    addCuttingPoint();
+    
+    // Create visual cutting line
+    createCuttingLineVisual();
+}
+
+function updateCuttingLine() {
+    if (!isDrawingCut) return;
+    
+    // Add new point to cutting path
+    addCuttingPoint();
+    updateCuttingLineVisual();
+}
+
+function addCuttingPoint() {
+    // Raycast from current mouse position to find world intersection
+    raycaster.setFromCamera(mouse, camera);
+    
+    // First, try to intersect with existing objects
+    const objectIntersects = raycaster.intersectObjects(objects, true);
+    
+    if (objectIntersects.length > 0) {
+        // Use intersection point on object surface
+        const intersectionPoint = objectIntersects[0].point.clone();
+        
+        // Only add if far enough from last point
+        if (cuttingPath.length === 0 || 
+            cuttingPath[cuttingPath.length - 1].distanceTo(intersectionPoint) > 0.1) {
+            cuttingPath.push(intersectionPoint);
+        }
+    } else {
+        // If no object intersection, project to a plane in front of camera
+        const projectionDistance = 10;
+        const worldPoint = raycaster.ray.at(projectionDistance, new THREE.Vector3());
+        
+        // Only add if far enough from last point
+        if (cuttingPath.length === 0 || 
+            cuttingPath[cuttingPath.length - 1].distanceTo(worldPoint) > 0.1) {
+            cuttingPath.push(worldPoint);
+        }
+    }
+}
+
+function finishCuttingLine() {
+    if (!isDrawingCut || cuttingPath.length < 2) {
+        clearCuttingLine();
+        return;
+    }
+    
+    // Find objects that intersect with the cutting line using proper raycasting
+    const objectsToCut = findObjectsAlongCuttingLineRaycast();
+    
+    // Perform the cutting operation on each object
+    objectsToCut.forEach(objectInfo => {
+        performAdvancedCut(objectInfo.object, objectInfo.intersectionPoints);
+    });
+    
+    // Clear the cutting line
+    clearCuttingLine();
+}
+
+function createCuttingLineVisual() {
+    if (cuttingLine) {
+        scene.remove(cuttingLine);
+    }
+    
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.LineBasicMaterial({ 
+        color: 0xff0000, 
+        linewidth: 3,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    cuttingLine = new THREE.Line(geometry, material);
+    scene.add(cuttingLine);
+}
+
+function updateCuttingLineVisual() {
+    if (!cuttingLine || cuttingPath.length < 2) return;
+    
+    const points = cuttingPath.map(point => point.clone());
+    cuttingLine.geometry.setFromPoints(points);
+}
+
+function clearCuttingLine() {
+    if (cuttingLine) {
+        scene.remove(cuttingLine);
+        cuttingLine = null;
+    }
+    cuttingStartPoint = null;
+    cuttingEndPoint = null;
+    cuttingPath = [];
+    isDrawingCut = false;
+}
+
+function findObjectsAlongCuttingLineRaycast() {
+    const objectsToCut = [];
+    const processedObjects = new Set();
+    
+    // For each point in the cutting path, cast a ray through the scene
+    cuttingPath.forEach((pathPoint, index) => {
+        // Calculate screen position for this world point
+        const screenPosition = worldToScreen(pathPoint);
+        
+        // Create raycaster from camera through this screen position
+        const pointRaycaster = new THREE.Raycaster();
+        pointRaycaster.setFromCamera(screenPosition, camera);
+        
+        // Find all objects intersected by this ray
+        const intersects = pointRaycaster.intersectObjects(objects, true);
+        
+        intersects.forEach(intersect => {
+            let targetObject = intersect.object;
+            
+            // Find root object
+            while (targetObject.parent && targetObject.parent.userData && targetObject.parent.userData.physics) {
+                targetObject = targetObject.parent;
+            }
+            
+            // Skip if we've already processed this object
+            if (processedObjects.has(targetObject)) {
+                return;
+            }
+            
+            // Check if the intersection point is close to our cutting path
+            const distanceToPath = getDistanceToPath(intersect.point);
+            
+            if (distanceToPath < 2.0) { // Within 2 units of the cutting path
+                processedObjects.add(targetObject);
+                
+                // Find the best intersection point for this object
+                const bestIntersection = findBestIntersectionForObject(targetObject);
+                
+                if (bestIntersection) {
+                    objectsToCut.push({
+                        object: targetObject,
+                        intersectionPoints: [bestIntersection]
+                    });
+                }
+            }
+        });
+    });
+    
+    return objectsToCut;
+}
+
+function worldToScreen(worldPoint) {
+    const vector = worldPoint.clone();
+    vector.project(camera);
+    
+    return new THREE.Vector2(vector.x, vector.y);
+}
+
+function getDistanceToPath(point) {
+    let minDistance = Infinity;
+    
+    // Check distance to each segment of the cutting path
+    for (let i = 0; i < cuttingPath.length - 1; i++) {
+        const segmentStart = cuttingPath[i];
+        const segmentEnd = cuttingPath[i + 1];
+        
+        const distance = distanceToLineSegment(point, segmentStart, segmentEnd);
+        minDistance = Math.min(minDistance, distance);
+    }
+    
+    return minDistance;
+}
+
+function distanceToLineSegment(point, lineStart, lineEnd) {
+    const line = new THREE.Vector3().subVectors(lineEnd, lineStart);
+    const lineLength = line.length();
+    
+    if (lineLength === 0) {
+        return point.distanceTo(lineStart);
+    }
+    
+    const t = Math.max(0, Math.min(1, 
+        new THREE.Vector3().subVectors(point, lineStart).dot(line) / (lineLength * lineLength)
+    ));
+    
+    const projection = lineStart.clone().add(line.multiplyScalar(t));
+    return point.distanceTo(projection);
+}
+
+function findBestIntersectionForObject(targetObject) {
+    let bestIntersection = null;
+    let minDistance = Infinity;
+    
+    // Cast rays through multiple points along the cutting path to find the best intersection
+    for (let i = 0; i < cuttingPath.length; i++) {
+        const pathPoint = cuttingPath[i];
+        const screenPos = worldToScreen(pathPoint);
+        
+        const testRaycaster = new THREE.Raycaster();
+        testRaycaster.setFromCamera(screenPos, camera);
+        
+        const intersects = testRaycaster.intersectObjects([targetObject], true);
+        
+        if (intersects.length > 0) {
+            const intersection = intersects[0];
+            let rootObject = intersection.object;
+            
+            // Find root object
+            while (rootObject.parent && rootObject.parent.userData && rootObject.parent.userData.physics) {
+                rootObject = rootObject.parent;
+            }
+            
+            if (rootObject === targetObject) {
+                const distanceToPath = getDistanceToPath(intersection.point);
+                if (distanceToPath < minDistance) {
+                    minDistance = distanceToPath;
+                    bestIntersection = intersection.point.clone();
+                }
+            }
+        }
+    }
+    
+    return bestIntersection;
+}
+
+function performAdvancedCut(object, intersectionPoints) {
+    if (!object.userData.physics || intersectionPoints.length === 0) return;
     
     const physics = object.userData.physics;
     
+    // Calculate cutting plane from intersection points
+    const cuttingPlane = calculateCuttingPlane(object, intersectionPoints);
+    
     if (physics.shape === 'sphere') {
-        // Cut sphere into two smaller spheres
-        const radius = physics.radius * 0.7;
-        const offset = radius * 0.8;
-        
-        createRigidSphere(
-            new THREE.Vector3(
-                object.position.x - offset,
-                object.position.y,
-                object.position.z
-            ),
-            radius,
-            object.material.color.getHex()
-        );
-        
-        createRigidSphere(
-            new THREE.Vector3(
-                object.position.x + offset,
-                object.position.y,
-                object.position.z
-            ),
-            radius,
-            object.material.color.getHex()
-        );
-        
-        removeObject(object);
-        
+        cutSphereWithPlane(object, cuttingPlane);
     } else if (physics.shape === 'box') {
-        // Cut box into smaller boxes
-        const size = physics.size * 0.7;
-        const offset = size * 0.6;
-        
-        for (let i = 0; i < 4; i++) {
-            const angle = (i / 4) * Math.PI * 2;
-            const x = Math.cos(angle) * offset;
-            const z = Math.sin(angle) * offset;
-            
-            createRigidCube(
-                new THREE.Vector3(
-                    object.position.x + x,
-                    object.position.y,
-                    object.position.z + z
-                ),
-                size,
-                object.material.color.getHex()
-            );
-        }
-        
-        removeObject(object);
-        
+        cutBoxWithPlane(object, cuttingPlane);
     } else if (physics.shape === 'compound') {
-        // Jelly bean - create multiple small spheres
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const radius = 0.3;
-            const distance = 1.2;
-            
-            createRigidSphere(
-                new THREE.Vector3(
-                    object.position.x + Math.cos(angle) * distance,
-                    object.position.y + Math.random() * 2,
-                    object.position.z + Math.sin(angle) * distance
-                ),
-                radius,
-                0xffaa44
-            );
-        }
-        
-        removeObject(object);
+        cutCompoundWithPlane(object, cuttingPlane);
     }
 }
 
+function calculateCuttingPlane(object, intersectionPoints) {
+    // Use the object's center and the average of intersection points to create a cutting plane
+    const avgIntersection = new THREE.Vector3();
+    intersectionPoints.forEach(point => avgIntersection.add(point));
+    avgIntersection.divideScalar(intersectionPoints.length);
+    
+    // Create cutting normal (simplified - use camera direction)
+    const normal = camera.getWorldDirection(new THREE.Vector3());
+    
+    return {
+        point: avgIntersection,
+        normal: normal,
+        localPoint: object.worldToLocal(avgIntersection.clone()),
+        localNormal: object.worldToLocal(normal.clone().add(object.position)).sub(object.worldToLocal(object.position.clone()))
+    };
+}
+
+function cutSphereWithPlane(sphere, cuttingPlane) {
+    const physics = sphere.userData.physics;
+    const radius = physics.radius;
+    const originalColor = sphere.material.color.getHex();
+    const originalVelocity = physics.velocity.clone();
+    const originalAngularVelocity = physics.angularVelocity.clone();
+    const originalPosition = sphere.position.clone();
+    
+    console.log('🔪 Cutting sphere with plane at position:', originalPosition);
+    
+    // Remove original object FIRST
+    removeObject(sphere);
+    
+    // For spheres, we'll create hemisphere-like shapes using custom geometry
+    const cutDirection = cuttingPlane.normal.clone().normalize();
+    
+    // Create two cut pieces with custom geometry
+    createSphereCutPiece(originalPosition, radius, originalColor, originalVelocity, originalAngularVelocity, cutDirection, 1);
+    createSphereCutPiece(originalPosition, radius, originalColor, originalVelocity, originalAngularVelocity, cutDirection, -1);
+    
+    console.log('✅ Created two sphere cut pieces');
+}
+
+function createSphereCutPiece(position, radius, color, velocity, angularVelocity, cutDirection, side) {
+    // Create a cut sphere piece using custom geometry
+    const geometry = new THREE.SphereGeometry(radius * 0.8, 16, 16, 0, Math.PI * 2, 0, Math.PI * (side > 0 ? 0.7 : 0.7));
+    
+    const material = new THREE.MeshPhysicalMaterial({
+        color: color,
+        metalness: 0.0,
+        roughness: 0.7,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.8
+    });
+    
+    const piece = new THREE.Mesh(geometry, material);
+    
+    // Position the piece offset from the cutting plane
+    const offset = cutDirection.clone().multiplyScalar(radius * 0.3 * side);
+    piece.position.copy(position).add(offset);
+    
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    scene.add(piece);
+
+    // Physics properties for the cut piece
+    piece.userData.physics = {
+        type: 'rigid',
+        mass: radius * radius * radius * 4.18 * 400, // Reduced mass for cut piece
+        velocity: velocity.clone().add(cutDirection.clone().multiplyScalar(side * 3)),
+        angularVelocity: angularVelocity.clone().add(new THREE.Vector3(
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 4
+        )),
+        restitution: 0.6,
+        friction: 0.5,
+        airFriction: 0.995,
+        angularDamping: 0.98,
+        radius: radius * 0.8,
+        shape: 'sphere',
+        momentOfInertia: (2/5) * radius * radius * radius * 4.18 * 400 * radius * radius,
+        isBeingDragged: false,
+        dragForce: 15.0,
+        maxDragVelocity: 8.0
+    };
+
+    objects.push(piece);
+    world.objects.push(piece);
+    return piece;
+}
+
+function cutBoxWithPlane(box, cuttingPlane) {
+    const physics = box.userData.physics;
+    const size = physics.size;
+    const originalColor = box.material.color.getHex();
+    const originalVelocity = physics.velocity.clone();
+    const originalAngularVelocity = physics.angularVelocity.clone();
+    const originalPosition = box.position.clone();
+    
+    console.log('🔪 Cutting box with plane at position:', originalPosition);
+    
+    // Remove original object FIRST
+    removeObject(box);
+    
+    // Calculate cutting plane in local coordinates
+    const cutDirection = cuttingPlane.normal.clone().normalize();
+    
+    // Determine which axis the cut is closest to
+    const absX = Math.abs(cutDirection.x);
+    const absY = Math.abs(cutDirection.y);
+    const absZ = Math.abs(cutDirection.z);
+    
+    if (absX > absY && absX > absZ) {
+        // Cut along X axis - create left and right pieces
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'x', -1);
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'x', 1);
+    } else if (absY > absZ) {
+        // Cut along Y axis - create top and bottom pieces
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'y', -1);
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'y', 1);
+    } else {
+        // Cut along Z axis - create front and back pieces
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'z', -1);
+        createBoxCutPiece(originalPosition, size, originalColor, originalVelocity, originalAngularVelocity, 'z', 1);
+    }
+    
+    console.log('✅ Created two box cut pieces');
+}
+
+function createBoxCutPiece(position, size, color, velocity, angularVelocity, axis, side) {
+    // Create geometry for cut piece
+    let geometry;
+    const cutRatio = 0.6; // How much of the original size each piece gets
+    
+    if (axis === 'x') {
+        geometry = new THREE.BoxGeometry(size * cutRatio, size, size);
+    } else if (axis === 'y') {
+        geometry = new THREE.BoxGeometry(size, size * cutRatio, size);
+    } else { // z axis
+        geometry = new THREE.BoxGeometry(size, size, size * cutRatio);
+    }
+    
+    const material = new THREE.MeshPhysicalMaterial({
+        color: color,
+        metalness: 0.0,
+        roughness: 0.8,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.9
+    });
+    
+    const piece = new THREE.Mesh(geometry, material);
+    
+    // Position the piece offset from the cutting plane
+    const offset = new THREE.Vector3();
+    const offsetDistance = size * 0.25;
+    
+    if (axis === 'x') {
+        offset.x = offsetDistance * side;
+    } else if (axis === 'y') {
+        offset.y = offsetDistance * side;
+    } else {
+        offset.z = offsetDistance * side;
+    }
+    
+    piece.position.copy(position).add(offset);
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    scene.add(piece);
+
+    // Physics properties for the cut piece
+    const pieceSize = size * cutRatio;
+    piece.userData.physics = {
+        type: 'rigid',
+        mass: pieceSize * pieceSize * pieceSize * 400, // Reduced mass for cut piece
+        velocity: velocity.clone().add(offset.clone().normalize().multiplyScalar(4)),
+        angularVelocity: angularVelocity.clone().add(new THREE.Vector3(
+            (Math.random() - 0.5) * 3,
+            (Math.random() - 0.5) * 3,
+            (Math.random() - 0.5) * 3
+        )),
+        restitution: 0.4,
+        friction: 0.7,
+        airFriction: 0.995,
+        angularDamping: 0.98,
+        size: pieceSize,
+        shape: 'box',
+        momentOfInertia: (1/6) * pieceSize * pieceSize * pieceSize * 400 * (pieceSize * pieceSize + pieceSize * pieceSize),
+        isBeingDragged: false,
+        dragForce: 15.0,
+        maxDragVelocity: 8.0
+    };
+
+    objects.push(piece);
+    world.objects.push(piece);
+    return piece;
+}
+
+function cutCompoundWithPlane(compound, cuttingPlane) {
+    const originalPosition = compound.position.clone();
+    const originalVelocity = compound.userData.physics.velocity.clone();
+    
+    console.log('🔪 Cutting jelly bean with plane at position:', originalPosition);
+    
+    // Remove original object FIRST
+    removeObject(compound);
+    
+    // For compound objects like jelly bean, create realistic cut pieces
+    // Split into two main pieces along the cutting plane
+    const cutDirection = cuttingPlane.normal.clone().normalize();
+    
+    // Create two irregular jelly bean halves
+    createJellybeanCutPiece(originalPosition, originalVelocity, cutDirection, 1);
+    createJellybeanCutPiece(originalPosition, originalVelocity, cutDirection, -1);
+    
+    // Add some small fragments for dramatic effect
+    const numFragments = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numFragments; i++) {
+        const angle = (i / numFragments) * Math.PI * 2;
+        const radius = 0.3 + Math.random() * 0.3;
+        const fragmentRadius = 0.08 + Math.random() * 0.1;
+        
+        const fragmentPosition = originalPosition.clone().add(new THREE.Vector3(
+            Math.cos(angle) * radius,
+            (Math.random() - 0.5) * 0.8,
+            Math.sin(angle) * radius
+        ));
+        
+        const fragment = createRigidSphere(fragmentPosition, fragmentRadius, 0xffaa44);
+        
+        // Add velocity based on original velocity plus explosion
+        const explosionVelocity = new THREE.Vector3(
+            Math.cos(angle) * 3,
+            Math.random() * 2 + 1,
+            Math.sin(angle) * 3
+        );
+        fragment.userData.physics.velocity.copy(originalVelocity).add(explosionVelocity);
+        fragment.userData.physics.angularVelocity.set(
+            (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 6
+        );
+    }
+    
+    console.log('✅ Created jellybean cut pieces and fragments');
+}
+
+function createJellybeanCutPiece(position, velocity, cutDirection, side) {
+    // Create an elongated piece that looks like half a jelly bean
+    const group = new THREE.Group();
+    const jellyBeanParts = [];
+    
+    // Scale factor for the cut piece
+    const scaleFactor = 0.7;
+    
+    // Main body (half sphere on one side)
+    const bodyGeometry = new THREE.SphereGeometry(0.6 * scaleFactor, 12, 12, 0, Math.PI * 2, 0, Math.PI * (side > 0 ? 0.8 : 0.6));
+    const jellyMaterial = new THREE.MeshPhysicalMaterial({
+        color: 0xffff44,
+        metalness: 0.0,
+        roughness: 0.4,
+        transmission: 0.05,
+        thickness: 0.3,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.7
+    });
+    
+    const body = new THREE.Mesh(bodyGeometry, jellyMaterial);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    jellyBeanParts.push(body);
+    
+    // Add an elongated part
+    const elongatedGeometry = new THREE.SphereGeometry(0.4 * scaleFactor, 10, 10);
+    elongatedGeometry.scale(1, side > 0 ? 1.5 : 0.8, 1);
+    const elongated = new THREE.Mesh(elongatedGeometry, jellyMaterial.clone());
+    elongated.position.y = side * 0.4 * scaleFactor;
+    elongated.castShadow = true;
+    elongated.receiveShadow = true;
+    group.add(elongated);
+    jellyBeanParts.push(elongated);
+    
+    // Position the piece offset from the cutting plane
+    const offset = cutDirection.clone().multiplyScalar(0.8 * side);
+    group.position.copy(position).add(offset);
+    scene.add(group);
+
+    // Physics properties for the cut piece
+    group.userData.physics = {
+        type: 'soft',
+        mass: 300, // Reduced for cut piece
+        velocity: velocity.clone().add(cutDirection.clone().multiplyScalar(side * 3)),
+        angularVelocity: new THREE.Vector3(
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 4
+        ),
+        restitution: 0.8,
+        friction: 0.3,
+        airFriction: 0.995,
+        angularDamping: 0.95,
+        stiffness: 0.3,
+        damping: 0.1,
+        parts: jellyBeanParts,
+        shape: 'compound',
+        deformation: 0,
+        momentOfInertia: 200,
+        isBeingDragged: false,
+        dragForce: 12.0,
+        maxDragVelocity: 7.0
+    };
+
+    objects.push(group);
+    world.objects.push(group);
+    return group;
+}
+
 function removeObject(object) {
+    console.log('🗑️ Removing object from scene:', object.userData.physics?.shape || 'unknown');
+    
+    // Remove from objects array
     const index = objects.indexOf(object);
     if (index > -1) {
         objects.splice(index, 1);
+        console.log('  ✅ Removed from objects array');
+    } else {
+        console.log('  ⚠️ Object not found in objects array');
     }
     
+    // Remove from world.objects array
     const worldIndex = world.objects.indexOf(object);
     if (worldIndex > -1) {
         world.objects.splice(worldIndex, 1);
+        console.log('  ✅ Removed from world.objects array');
+    } else {
+        console.log('  ⚠️ Object not found in world.objects array');
     }
     
+    // Remove from scene
     scene.remove(object);
+    console.log('  ✅ Removed from scene');
+    
+    // If this was the selected object, clear selection
+    if (selectedObject === object) {
+        selectedObject = null;
+        console.log('  ✅ Cleared selection');
+    }
 }
 
 function resetScene() {
@@ -786,5 +1312,7 @@ console.log('Physics simulation initialized!');
 console.log('Controls:');
 console.log('- Left click + drag: Move objects');
 console.log('- Right click: Toggle cutting mode');
+console.log('- In cutting mode: Drag across objects to slice them');
 console.log('- Shift + drag: Move the sun light');
 console.log('- Space: Reset scene');
+console.log('- Escape: Cancel cutting line');
