@@ -417,9 +417,11 @@ class ShowcaseManager {
                 if (animationData.animationId) {
                     cancelAnimationFrame(animationData.animationId);
                 }
-                // Special handling for boids
+                // Special handling for specific demos
                 if (name === 'boids' && window.pauseBoids) {
                     window.pauseBoids();
+                } else if (name === 'islands' && window.pauseIslands) {
+                    window.pauseIslands();
                 }
                 console.log(`Paused demo: ${name}`);
             }
@@ -431,9 +433,11 @@ class ShowcaseManager {
         const animationData = this.activeAnimations.get(name);
         if (animationData && !animationData.isPlaying) {
             animationData.isPlaying = true;
-            // Special handling for boids
+            // Special handling for specific demos
             if (name === 'boids' && window.resumeBoids) {
                 window.resumeBoids();
+            } else if (name === 'islands' && window.resumeIslands) {
+                window.resumeIslands();
             } else {
                 animationData.animate();
             }
@@ -443,10 +447,10 @@ class ShowcaseManager {
     
     // Check if previews are in viewport and manage accordingly
     checkViewportVisibility() {
-        let hasPlayingDemo = false;
-        let firstVisibleDemo = null;
+        let mostVisibleDemo = null;
+        let maxVisibleArea = 0;
         
-        // First pass: check what's visible and what's playing
+        // Find the demo with the largest visible area
         this.activeAnimations.forEach((animationData, name) => {
             const previewElement = document.getElementById(`preview-${name}`);
             if (!previewElement) return;
@@ -455,61 +459,47 @@ class ShowcaseManager {
             const windowHeight = window.innerHeight || document.documentElement.clientHeight;
             const windowWidth = window.innerWidth || document.documentElement.clientWidth;
             
-            const isInViewport = (
-                rect.top < windowHeight &&
-                rect.bottom > 0 &&
-                rect.left < windowWidth &&
-                rect.right > 0
-            );
+            // Calculate visible area
+            const visibleTop = Math.max(0, rect.top);
+            const visibleBottom = Math.min(windowHeight, rect.bottom);
+            const visibleLeft = Math.max(0, rect.left);
+            const visibleRight = Math.min(windowWidth, rect.right);
             
-            if (isInViewport && !firstVisibleDemo) {
-                firstVisibleDemo = name;
+            const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+            const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+            const visibleArea = visibleHeight * visibleWidth;
+            
+            // Only consider elements that are at least 30% visible
+            const totalArea = rect.width * rect.height;
+            const visibilityRatio = totalArea > 0 ? visibleArea / totalArea : 0;
+            
+            if (visibilityRatio > 0.3 && visibleArea > maxVisibleArea) {
+                maxVisibleArea = visibleArea;
+                mostVisibleDemo = name;
             }
-            
+        });
+        
+        // Pause all animations first
+        this.activeAnimations.forEach((animationData, name) => {
             if (animationData.isPlaying) {
-                hasPlayingDemo = true;
-                if (!isInViewport) {
-                    // Stop if out of view
-                    animationData.isPlaying = false;
-                    if (animationData.animationId) {
-                        cancelAnimationFrame(animationData.animationId);
-                    }
-                    // Special handling for boids
-                    if (name === 'boids' && window.pauseBoids) {
-                        window.pauseBoids();
-                    }
-                    console.log(`Paused demo (out of view): ${name}`);
+                animationData.isPlaying = false;
+                if (animationData.animationId) {
+                    cancelAnimationFrame(animationData.animationId);
                 }
+                // Special handling for specific demos
+                if (name === 'boids' && window.pauseBoids) {
+                    window.pauseBoids();
+                } else if (name === 'islands' && window.pauseIslands) {
+                    window.pauseIslands();
+                }
+                console.log(`Paused demo: ${name}`);
             }
         });
         
-        // If no demo is playing and we have a visible one, start it
-        if (!hasPlayingDemo && firstVisibleDemo) {
-            this.resumeAnimation(firstVisibleDemo);
+        // Resume only the most visible demo
+        if (mostVisibleDemo) {
+            this.resumeAnimation(mostVisibleDemo);
         }
-        
-        // Second pass: handle viewport changes for visible demos
-        this.activeAnimations.forEach((animationData, name) => {
-            const previewElement = document.getElementById(`preview-${name}`);
-            if (!previewElement) return;
-            
-            const rect = previewElement.getBoundingClientRect();
-            const windowHeight = window.innerHeight || document.documentElement.clientHeight;
-            const windowWidth = window.innerWidth || document.documentElement.clientWidth;
-            
-            const isInViewport = (
-                rect.top < windowHeight &&
-                rect.bottom > 0 &&
-                rect.left < windowWidth &&
-                rect.right > 0
-            );
-            
-            if (isInViewport && !animationData.isPlaying && name === firstVisibleDemo) {
-                // This is the priority visible demo
-                this.pauseAllExcept(name);
-                this.resumeAnimation(name);
-            }
-        });
     }
 
     async loadCodeblocks() {
@@ -608,7 +598,8 @@ class ShowcaseManager {
             'explosion',
             'lightning',
             'aurora',
-            'fireworks'
+            'fireworks',
+            'islands'
         ];
 
         const existingCodeblocks = [];
@@ -825,20 +816,18 @@ class ShowcaseManager {
             let animateFunction = null;
             let isPlaying = true;
             
-            // Create a mini version of the codeblock code
-            const miniVersion = this.createMiniVersion(name, codeText);
-            
-            // Execute the mini version
+            // Execute the full script
             try {
                 // Make globals available
                 window.scene = scene;
                 window.camera = camera;
                 window.renderer = renderer;
                 
-                animateFunction = eval(`(function() {
-                    ${miniVersion}
-                    return typeof animate === 'function' ? animate : null;
-                })()`);
+                // Execute the full codeblock script
+                eval(codeText);
+                
+                // Look for common animation function names
+                animateFunction = window.render || window.animate || null;
             } catch (error) {
                 console.error(`Error in ${name} preview:`, error);
                 this.showPreviewError(previewElement, error.message);
@@ -852,7 +841,10 @@ class ShowcaseManager {
                 if (animationData && animationData.isPlaying) {
                     animationData.animationId = requestAnimationFrame(animate);
                     
-                    if (animateFunction) {
+                    // For scripts that have their own render loops, don't double-render
+                    if (!animateFunction) {
+                        renderer.render(scene, camera);
+                    } else {
                         try {
                             animateFunction();
                         } catch (error) {
@@ -860,8 +852,6 @@ class ShowcaseManager {
                             animationData.isPlaying = false;
                         }
                     }
-                    
-                    renderer.render(scene, camera);
                 }
             };
 
@@ -925,31 +915,6 @@ class ShowcaseManager {
         }
     }
 
-    createMiniVersion(name, codeText) {
-        // For boids, just use the actual codeblock script
-        if (name === 'boids') {
-            return codeText;
-        }
-        
-        // Create simplified versions for other codeblocks
-        switch (name) {
-            default:
-                // Generic fallback
-                return `
-                    const geometry = new THREE.BoxGeometry(1, 1, 1);
-                    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
-                    const cube = new THREE.Mesh(geometry, material);
-                    scene.add(cube);
-                    camera.position.z = 3;
-                    
-                    function animate() {
-                        cube.rotation.x += 0.01;
-                        cube.rotation.y += 0.01;
-                    }
-                `;
-        }
-    }
-
     showPreviewError(previewElement, error) {
         previewElement.innerHTML = `
             <div class="preview-error">
@@ -976,7 +941,7 @@ const showcaseManager = new ShowcaseManager(portfolio);
 let visibilityTimer;
 function throttledVisibilityCheck() {
     clearTimeout(visibilityTimer);
-    visibilityTimer = setTimeout(() => showcaseManager.checkViewportVisibility(), 150);
+    visibilityTimer = setTimeout(() => showcaseManager.checkViewportVisibility(), 100);
 }
 
 window.addEventListener('scroll', throttledVisibilityCheck);
