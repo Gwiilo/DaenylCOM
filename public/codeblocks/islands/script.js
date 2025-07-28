@@ -94,6 +94,7 @@ class IslandGenerator {
     constructor() {
         this.size = 500; // Increased to 500x500 grid for larger world
         this.seaLevel = 0.25; // Set sea level to 0.25 as requested
+        this.segmentSize = 200; // Number of segments for terrain resolution
         this.maxHeight = 8;
         this.noise = new SimpleNoise(Math.random() * 1000);
         this.isTopDown = true;
@@ -126,8 +127,8 @@ class IslandGenerator {
         // Create geometry from scratch with height data
         const width = this.size;
         const height = this.size;
-        const widthSegments = Math.min(this.size - 1, 199); // Cap at 199 for performance (200x200 grid)
-        const heightSegments = Math.min(this.size - 1, 199);
+        const widthSegments = Math.min(this.segmentSize, this.size - 1);
+        const heightSegments = Math.min(this.segmentSize, this.size - 1);
 
         const geometry = new THREE.BufferGeometry();
         
@@ -175,15 +176,11 @@ class IslandGenerator {
                 // Full noise-driven terrain throughout (no plateau)
                 terrainHeight = terrainHeight * islandFalloff;
                 
-                // Ensure minimum sea level
-                terrainHeight = Math.max(terrainHeight, 0);
+                // Allow terrain to dip below sea level for proper underwater areas
+                terrainHeight = Math.max(terrainHeight, -3); // Allow terrain to go 3 units below sea level
                 
                 // Correct order: X, Y (height), Z for horizontal terrain
                 vertices.push(x, terrainHeight, z);
-                
-                // Determine color based on height
-                const color = this.getTerrainColor(terrainHeight, distance, maxDistance);
-                colors.push(color.r, color.g, color.b);
                 
                 // UV coordinates
                 uvs.push(ix / widthSegments, iy / heightSegments);
@@ -206,12 +203,70 @@ class IslandGenerator {
 
         geometry.setIndex(indices);
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
         geometry.computeVertexNormals();
 
+        // Create a texture-based material instead of vertex colors
+        const textureSize = this.size; // Texture size matches world size
+        const canvas = document.createElement('canvas');
+        canvas.width = textureSize;
+        canvas.height = textureSize;
+        const ctx = canvas.getContext('2d');
+        
+        // Generate texture data pixel by pixel
+        const imageData = ctx.createImageData(textureSize, textureSize);
+        const data = imageData.data;
+        
+        for (let y = 0; y < textureSize; y++) {
+            for (let x = 0; x < textureSize; x++) {
+                // Convert pixel coordinates to world coordinates
+                const worldX = (x / textureSize) * this.size - this.size / 2;
+                const worldZ = (y / textureSize) * this.size - this.size / 2;
+                
+                // Calculate height at this position (same logic as terrain generation)
+                const distance = Math.sqrt(worldX * worldX + worldZ * worldZ);
+                const maxDistance = this.size * 0.6;
+                const normalizedDistance = Math.min(distance / maxDistance, 1.0);
+                
+                let terrainHeight = this.noise.fractalNoise2d(worldX, worldZ, 8);
+                const displacementMultiplier = 1.0 + normalizedDistance * 4.0;
+                terrainHeight *= displacementMultiplier;
+                terrainHeight = (terrainHeight + 1) * 0.5;
+                terrainHeight = terrainHeight * 15;
+                
+                let islandFalloff;
+                if (normalizedDistance > 0.75) {
+                    islandFalloff = 0;
+                } else {
+                    const transitionProgress = normalizedDistance / 0.75;
+                    islandFalloff = Math.pow(1 - transitionProgress, 2);
+                }
+                
+                terrainHeight = terrainHeight * islandFalloff;
+                terrainHeight = Math.max(terrainHeight, -3); // Allow terrain to go 3 units below sea level
+                
+                // Get color for this pixel
+                const color = this.getTerrainColor(terrainHeight, distance, maxDistance, worldX, worldZ);
+                
+                const pixelIndex = (y * textureSize + x) * 4;
+                data[pixelIndex] = Math.floor(color.r * 255);     // R
+                data[pixelIndex + 1] = Math.floor(color.g * 255); // G
+                data[pixelIndex + 2] = Math.floor(color.b * 255); // B
+                data[pixelIndex + 3] = 255;                       // A
+            }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Create texture from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.magFilter = THREE.NearestFilter; // No interpolation - sharp pixels
+        texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrap;
+        texture.wrapT = THREE.ClampToEdgeWrap;
+
         const material = new THREE.MeshLambertMaterial({ 
-            vertexColors: true,
+            map: texture,
             side: THREE.DoubleSide
         });
         
@@ -226,20 +281,30 @@ class IslandGenerator {
         console.log('Generated terrain with max height:', maxHeight);
     }
 
-    getTerrainColor(height, distance, maxDistance) {
+    getTerrainColor(height, distance, maxDistance, x, z) {
         let color = new THREE.Color();
         
-        // Sharp, distinct biome colors with no blending
-        if (height <= this.seaLevel + 0.1) {
+        // FIRST: Check if terrain is below sea level - force sand color immediately
+        if (height <= this.seaLevel) {
+            color.setHex(0xF4E4BC); // Sandy beige for underwater areas
+            return color;
+        }
+        
+        // Add biome border randomization using seeded noise at 10% strength
+        const biomeNoise = this.noise.noise2d(x * 0.05, z * 0.05) * 0.1; // 10% noise influence
+        const adjustedHeight = height + biomeNoise;
+        
+        // SECOND: Check adjusted height for beach areas near water
+        if (adjustedHeight <= this.seaLevel + 0.1) {
             // Beach/sand - only very close to water
             color.setHex(0xF4E4BC); // Sandy beige
-        } else if (height < 2) {
+        } else if (adjustedHeight < 2) {
             // Grass/lowlands
             color.setHex(0x4A7C2A); // Rich green
-        } else if (height < 5) {
+        } else if (adjustedHeight < 5) {
             // Forest
             color.setHex(0x2D5016); // Dark forest green
-        } else if (height < 8) {
+        } else if (adjustedHeight < 8) {
             // Mountains
             color.setHex(0x8B7355); // Brown mountain
         } else {
@@ -256,12 +321,15 @@ class IslandGenerator {
         const waterMaterial = new THREE.MeshLambertMaterial({ 
             color: 0x006994,
             transparent: true,
-            opacity: 0.7
+            opacity: 0.7,
+            depthWrite: false, // Don't write to depth buffer to avoid z-fighting
+            side: THREE.DoubleSide
         });
         
         this.waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
         this.waterMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-        this.waterMesh.position.y = this.seaLevel; // Match exact sea level
+        this.waterMesh.position.y = this.seaLevel; // Water at actual sea level
+        this.waterMesh.renderOrder = 1; // Render after terrain
         this.terrainGroup.add(this.waterMesh);
     }
 
@@ -473,8 +541,119 @@ class IslandGenerator {
             this.generateTerrain();
         };
         
+        // Settings section
+        const settingsDiv = document.createElement('div');
+        settingsDiv.style.marginBottom = '10px';
+        settingsDiv.style.borderTop = '1px solid #666';
+        settingsDiv.style.paddingTop = '10px';
+        
+        // World size control
+        const sizeLabel = document.createElement('label');
+        sizeLabel.textContent = 'World Size: ';
+        sizeLabel.style.display = 'block';
+        sizeLabel.style.marginBottom = '5px';
+        
+        const sizeInput = document.createElement('input');
+        sizeInput.type = 'range';
+        sizeInput.min = '100';
+        sizeInput.max = '1000';
+        sizeInput.step = '50';
+        sizeInput.value = this.size;
+        sizeInput.style.width = '150px';
+        sizeInput.style.marginBottom = '5px';
+        
+        const sizeValue = document.createElement('span');
+        sizeValue.textContent = this.size;
+        sizeValue.style.marginLeft = '10px';
+        
+        sizeInput.oninput = () => {
+            this.size = parseInt(sizeInput.value);
+            sizeValue.textContent = this.size;
+        };
+        
+        // Segment size control
+        const segmentLabel = document.createElement('label');
+        segmentLabel.textContent = 'Segment Count: ';
+        segmentLabel.style.display = 'block';
+        segmentLabel.style.marginBottom = '5px';
+        segmentLabel.style.marginTop = '10px';
+        
+        const segmentInput = document.createElement('input');
+        segmentInput.type = 'range';
+        segmentInput.min = '50';
+        segmentInput.max = '500';
+        segmentInput.step = '25';
+        segmentInput.value = this.segmentSize;
+        segmentInput.style.width = '150px';
+        segmentInput.style.marginBottom = '5px';
+        
+        const segmentValue = document.createElement('span');
+        segmentValue.textContent = this.segmentSize;
+        segmentValue.style.marginLeft = '10px';
+        
+        segmentInput.oninput = () => {
+            this.segmentSize = parseInt(segmentInput.value);
+            segmentValue.textContent = this.segmentSize;
+        };
+        
+        // Sea level control
+        const seaLabel = document.createElement('label');
+        seaLabel.textContent = 'Sea Level: ';
+        seaLabel.style.display = 'block';
+        seaLabel.style.marginBottom = '5px';
+        seaLabel.style.marginTop = '10px';
+        
+        const seaInput = document.createElement('input');
+        seaInput.type = 'range';
+        seaInput.min = '0';
+        seaInput.max = '2';
+        seaInput.step = '0.1';
+        seaInput.value = this.seaLevel;
+        seaInput.style.width = '150px';
+        seaInput.style.marginBottom = '5px';
+        
+        const seaValue = document.createElement('span');
+        seaValue.textContent = this.seaLevel.toFixed(1);
+        seaValue.style.marginLeft = '10px';
+        
+        seaInput.oninput = () => {
+            this.seaLevel = parseFloat(seaInput.value);
+            seaValue.textContent = this.seaLevel.toFixed(1);
+        };
+        
+        // Apply settings button
+        const applyButton = document.createElement('button');
+        applyButton.textContent = 'Apply Settings';
+        applyButton.style.display = 'block';
+        applyButton.style.marginTop = '10px';
+        applyButton.style.padding = '5px 10px';
+        applyButton.style.background = '#FF9800';
+        applyButton.style.color = 'white';
+        applyButton.style.border = 'none';
+        applyButton.style.borderRadius = '3px';
+        applyButton.style.cursor = 'pointer';
+        
+        applyButton.onclick = () => {
+            this.generateTerrain();
+            this.setupCamera(); // Recalculate camera for new world size
+        };
+        
+        settingsDiv.appendChild(sizeLabel);
+        settingsDiv.appendChild(sizeInput);
+        settingsDiv.appendChild(sizeValue);
+        settingsDiv.appendChild(segmentLabel);
+        settingsDiv.appendChild(segmentInput);
+        settingsDiv.appendChild(segmentValue);
+        settingsDiv.appendChild(seaLabel);
+        settingsDiv.appendChild(seaInput);
+        settingsDiv.appendChild(seaValue);
+        settingsDiv.appendChild(applyButton);
+        
         // Info text
         const infoText = document.createElement('div');
+        infoText.style.marginTop = '10px';
+        infoText.style.borderTop = '1px solid #666';
+        infoText.style.paddingTop = '10px';
         infoText.innerHTML = `
             <div><strong>Island Generator</strong></div>
             <div>• Top-down orthographic view</div>
@@ -486,6 +665,7 @@ class IslandGenerator {
         
         uiContainer.appendChild(cameraButton);
         uiContainer.appendChild(generateButton);
+        uiContainer.appendChild(settingsDiv);
         uiContainer.appendChild(infoText);
         
         // Add to the canvas container
