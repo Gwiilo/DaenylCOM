@@ -1,0 +1,265 @@
+/* CSS Custom Properties for dynamic colors */
+:root {
+    --primary-color: hsl(180, 70%, 50%);
+    --secondary-color: hsl(130, 70%, 50%);
+    --third-color: hsl(230, 70%, 50%);
+    --bg-dark: #0a0a0a;
+    --text-shadow: 0 0 20px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    background: var(--bg-dark);
+}
+
+.container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Animated background */
+.animated-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 50%, var(--secondary-color) 0%, var(--third-color) 100%);
+    z-index: 1;
+}
+
+/* Animated vignette */
+.vignette {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 40%,
+        var(--bg-dark) 100%
+    );
+    animation: vignetteAnimation 20s ease-in-out infinite;
+}
+
+/* Animation points that lerp around the frame */
+.animation-point {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    filter: blur(80px);
+    animation-duration: 30s;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+}
+
+.point-1 {
+    background: var(--primary-color);
+    animation-name: point1Movement;
+    animation-delay: 0s;
+}
+
+.point-2 {
+    background: var(--secondary-color);
+    animation-name: point2Movement;
+    animation-delay: -7.5s;
+}
+
+.point-3 {
+    background: var(--third-color);
+    animation-name: point3Movement;
+    animation-delay: -15s;
+}
+
+.point-4 {
+    background: var(--primary-color);
+    animation-name: point4Movement;
+    animation-delay: -22.5s;
+    opacity: 0.6;
+}
+
+/* Text container and pixelated text */
+.text-container {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pixelated-text {
+    font-size: clamp(4rem, 15vw, 20rem);
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    line-height: 1;
+    position: relative;
+    
+    /* Pixelated effect */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    
+    /* Enhanced text styling for better visibility */
+    text-shadow: 
+        0 0 10px var(--primary-color),
+        0 0 20px var(--secondary-color),
+        0 0 30px var(--third-color),
+        0 0 40px var(--primary-color);
+    
+    /* Gradient text effect */
+    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color), var(--third-color), var(--primary-color));
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    animation: textGlow 4s ease-in-out infinite alternate, gradientShift 8s ease-in-out infinite;
+    
+    /* Add a subtle stroke for definition */
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.3);
+    text-stroke: 1px rgba(255, 255, 255, 0.3);
+}
+
+/* Alternative approach for better browser support */
+.pixelated-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, 
+        rgba(255, 255, 255, 0.1), 
+        rgba(255, 255, 255, 0.05), 
+        rgba(255, 255, 255, 0.1)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* Keyframe animations */
+@keyframes vignetteAnimation {
+    0%, 100% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
+}
+
+@keyframes point1Movement {
+    0% { transform: translate(-100px, -100px); }
+    25% { transform: translate(calc(100vw - 100px), -100px); }
+    50% { transform: translate(calc(100vw - 100px), calc(100vh - 100px)); }
+    75% { transform: translate(-100px, calc(100vh - 100px)); }
+    100% { transform: translate(-100px, -100px); }
+}
+
+@keyframes point2Movement {
+    0% { transform: translate(calc(100vw - 100px), -100px); }
+    25% { transform: translate(calc(100vw - 100px), calc(100vh - 100px)); }
+    50% { transform: translate(-100px, calc(100vh - 100px)); }
+    75% { transform: translate(-100px, -100px); }
+    100% { transform: translate(calc(100vw - 100px), -100px); }
+}
+
+@keyframes point3Movement {
+    0% { transform: translate(calc(100vw - 100px), calc(100vh - 100px)); }
+    25% { transform: translate(-100px, calc(100vh - 100px)); }
+    50% { transform: translate(-100px, -100px); }
+    75% { transform: translate(calc(100vw - 100px), -100px); }
+    100% { transform: translate(calc(100vw - 100px), calc(100vh - 100px)); }
+}
+
+@keyframes point4Movement {
+    0% { transform: translate(-100px, calc(100vh - 100px)); }
+    25% { transform: translate(-100px, -100px); }
+    50% { transform: translate(calc(100vw - 100px), -100px); }
+    75% { transform: translate(calc(100vw - 100px), calc(100vh - 100px)); }
+    100% { transform: translate(-100px, calc(100vh - 100px)); }
+}
+
+@keyframes textGlow {
+    0% {
+        text-shadow: 
+            0 0 10px var(--primary-color),
+            0 0 20px var(--secondary-color),
+            0 0 30px var(--third-color);
+    }
+    100% {
+        text-shadow: 
+            0 0 20px var(--primary-color),
+            0 0 40px var(--secondary-color),
+            0 0 60px var(--third-color),
+            0 0 80px var(--primary-color);
+    }
+}
+
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 0%;
+    }
+    50% {
+        background-position: 100% 100%;
+    }
+    100% {
+        background-position: 0% 0%;
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0%;
+    }
+    100% {
+        background-position: 200% 0%;
+    }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .pixelated-text {
+        font-size: clamp(2rem, 12vw, 8rem);
+    }
+    
+    .animation-point {
+        width: 150px;
+        height: 150px;
+        filter: blur(60px);
+    }
+}
+
+@media (max-width: 480px) {
+    .pixelated-text {
+        font-size: clamp(1.5rem, 10vw, 6rem);
+    }
+    
+    .animation-point {
+        width: 100px;
+        height: 100px;
+        filter: blur(40px);
+    }
+}
