@@ -124,10 +124,12 @@ body {
     background: linear-gradient(
         135deg,
         var(--primary-color) 0%,
-        var(--secondary-color) 50%,
-        var(--accent-color) 100%
+        var(--secondary-color) 25%,
+        var(--accent-color) 50%,
+        var(--primary-color) 75%,
+        var(--secondary-color) 100%
     );
-    background-size: 200% 200%;
+    background-size: 400% 400%;
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -135,12 +137,80 @@ body {
     letter-spacing: -0.04em;
     line-height: 1.1;
     padding: 0.1em 0;
+    position: relative;
+    opacity: 1; /* Ensure full opacity */
     
     /* Modern text rendering */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    
+    /* Snazzy animations */
+    animation: 
+        gradientShift 8s ease-in-out infinite,
+        textGlow 4s ease-in-out infinite alternate;
+    
+    /* Only colored glow, no white outline here */
+    text-shadow: 
+        0 0 20px hsla(var(--primary-hue), 70%, 50%, 0.4),
+        0 0 40px hsla(var(--secondary-hue), 70%, 40%, 0.3);
+    
+    /* Smooth hover transition */
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.3s ease;
 }
+
+/* White outline behind the text */
+.logo-text::before {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    font-size: inherit;
+    font-weight: inherit;
+    font-family: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    color: white;
+    z-index: -1;
+    
+    /* Create thick white outline positioned to bottom-right */
+    text-shadow: 
+        6px 6px 0 white,
+        7px 7px 0 white,
+        8px 8px 0 white,
+        9px 9px 0 white,
+        10px 10px 0 white;
+}
+
+.logo-text:hover {
+    transform: scale(1.02) translateY(-2px);
+    filter: 
+        brightness(1.1) 
+        contrast(1.05)
+        drop-shadow(0 10px 20px hsla(var(--primary-hue), 70%, 50%, 0.15));
+    animation-duration: 4s, 2s; /* Speed up animations on hover */
+}
+
+/* Individual letter styling */
+.logo-text .letter {
+    display: inline-block;
+    animation: letterFloat 6s ease-in-out infinite;
+    transition: transform 0.3s ease;
+}
+
+/* Stagger the letter animations */
+.logo-text .letter:nth-child(1) { animation-delay: 0s; }
+.logo-text .letter:nth-child(2) { animation-delay: 0.1s; }
+.logo-text .letter:nth-child(3) { animation-delay: 0.2s; }
+.logo-text .letter:nth-child(4) { animation-delay: 0.3s; }
+.logo-text .letter:nth-child(5) { animation-delay: 0.4s; }
+.logo-text .letter:nth-child(6) { animation-delay: 0.5s; }
+.logo-text .letter:nth-child(7) { animation-delay: 0.6s; }
+.logo-text .letter:nth-child(8) { animation-delay: 0.7s; }
+.logo-text .letter:nth-child(9) { animation-delay: 0.8s; }
+.logo-text .letter:nth-child(10) { animation-delay: 0.9s; }
 
 /* Showcase section styles */
 .showcase-section {
@@ -470,6 +540,57 @@ body {
             transparent 15%,
             rgba(0, 0, 0, 0.7) 80%
         );
+    }
+}
+
+/* Snazzy logo text animations */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    25% {
+        background-position: 100% 50%;
+    }
+    50% {
+        background-position: 100% 100%;
+    }
+    75% {
+        background-position: 0% 100%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes textGlow {
+    0% {
+        text-shadow: 
+            0 0 20px hsla(var(--primary-hue), 70%, 50%, 0.3),
+            0 0 40px hsla(var(--secondary-hue), 70%, 40%, 0.2);
+    }
+    100% {
+        text-shadow: 
+            0 0 30px hsla(var(--primary-hue), 70%, 50%, 0.5),
+            0 0 60px hsla(var(--secondary-hue), 70%, 40%, 0.3),
+            0 0 90px hsla(var(--third-hue), 70%, 60%, 0.2);
+    }
+}
+
+@keyframes letterFloat {
+    0% {
+        transform: translateY(0px) rotate(0deg);
+    }
+    25% {
+        transform: translateY(-2px) rotate(1deg);
+    }
+    50% {
+        transform: translateY(1px) rotate(-0.5deg);
+    }
+    75% {
+        transform: translateY(-1px) rotate(0.8deg);
+    }
+    100% {
+        transform: translateY(0px) rotate(0deg);
     }
 }
 

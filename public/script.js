@@ -22,6 +22,7 @@ class DaenylPortfolio {
     onReady() {
         console.log('Daenyl.com Portfolio Loaded');
         this.updateColors();
+        this.setupSnazzyLogoEffects();
     }
 
     // Calculate colors based on current day of year
@@ -104,6 +105,213 @@ class DaenylPortfolio {
         };
         
         animate();
+    }
+
+    // Setup snazzy logo effects and interactions
+    setupSnazzyLogoEffects() {
+        const logoText = document.querySelector('.logo-text');
+        if (!logoText) return;
+
+        // Set data-text attribute for the white outline
+        logoText.setAttribute('data-text', logoText.textContent);
+
+        // Wrap each letter in a span for individual animation
+        this.wrapLettersInSpans(logoText);
+
+        // Add magnetic cursor effect with linear movement
+        let isHovering = false;
+        let mouseX = 0;
+        let mouseY = 0;
+        let logoRect = logoText.getBoundingClientRect();
+        let currentX = 0;
+        let currentY = 0;
+
+        // Update logo rect on resize
+        window.addEventListener('resize', () => {
+            logoRect = logoText.getBoundingClientRect();
+        });
+
+        logoText.addEventListener('mouseenter', () => {
+            isHovering = true;
+        });
+
+        logoText.addEventListener('mouseleave', () => {
+            isHovering = false;
+            // Smoothly return to original position
+            this.animateToPosition(logoText, 0, 0, 300);
+        });
+
+        logoText.addEventListener('mousemove', (e) => {
+            if (!isHovering) return;
+            
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Calculate magnetic effect
+            const centerX = logoRect.left + logoRect.width / 2;
+            const centerY = logoRect.top + logoRect.height / 2;
+            
+            const targetX = (mouseX - centerX) * 0.05;
+            const targetY = (mouseY - centerY) * 0.05;
+            
+            // Linear movement to new position
+            this.animateToPosition(logoText, targetX, targetY, 100);
+        });
+
+        // Add click ripple effect
+        logoText.addEventListener('click', (e) => {
+            this.createRippleEffect(e, logoText);
+        });
+
+        // Add periodic sparkle effect
+        this.startSparkleEffect(logoText);
+    }
+
+    // Wrap each letter in spans for individual animation
+    wrapLettersInSpans(element) {
+        const text = element.textContent;
+        element.innerHTML = '';
+        
+        for (let i = 0; i < text.length; i++) {
+            const letter = text[i];
+            const span = document.createElement('span');
+            span.textContent = letter;
+            span.className = 'letter';
+            
+            // Handle spaces
+            if (letter === ' ') {
+                span.style.width = '0.3em';
+                span.innerHTML = '&nbsp;';
+            }
+            
+            element.appendChild(span);
+        }
+    }
+
+    // Smooth linear animation to position
+    animateToPosition(element, targetX, targetY, duration) {
+        const startX = parseFloat(element.style.transform?.match(/translateX\(([^)]+)\)/)?.[1] || 0);
+        const startY = parseFloat(element.style.transform?.match(/translateY\(([^)]+)\)/)?.[1] || 0);
+        const startTime = performance.now();
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Linear interpolation
+            const currentX = startX + (targetX - startX) * progress;
+            const currentY = startY + (targetY - startY) * progress;
+            
+            element.style.transform = `translate(${currentX}px, ${currentY}px) scale(1.02)`;
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
+    }
+
+    // Create ripple effect on click
+    createRippleEffect(event, element) {
+        const ripple = document.createElement('div');
+        const rect = element.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = event.clientX - rect.left - size / 2;
+        const y = event.clientY - rect.top - size / 2;
+
+        ripple.style.cssText = `
+            position: absolute;
+            width: ${size}px;
+            height: ${size}px;
+            left: ${x}px;
+            top: ${y}px;
+            background: radial-gradient(circle, hsla(var(--primary-hue), 70%, 50%, 0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            animation: rippleExpand 0.6s ease-out forwards;
+        `;
+
+        element.style.position = 'relative';
+        element.appendChild(ripple);
+
+        // Add ripple animation keyframes if not exists
+        if (!document.querySelector('#ripple-keyframes')) {
+            const style = document.createElement('style');
+            style.id = 'ripple-keyframes';
+            style.textContent = `
+                @keyframes rippleExpand {
+                    0% {
+                        transform: scale(0);
+                        opacity: 1;
+                    }
+                    100% {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        setTimeout(() => ripple.remove(), 600);
+    }
+
+    // Start sparkle effect
+    startSparkleEffect(element) {
+        const createSparkle = () => {
+            if (Math.random() > 0.3) return; // 30% chance of sparkle
+
+            const sparkle = document.createElement('div');
+            const rect = element.getBoundingClientRect();
+            const x = Math.random() * rect.width;
+            const y = Math.random() * rect.height;
+
+            sparkle.style.cssText = `
+                position: absolute;
+                width: 4px;
+                height: 4px;
+                left: ${x}px;
+                top: ${y}px;
+                background: hsla(var(--third-hue), 100%, 80%, 1.0);
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 1000;
+                animation: sparkleAnimation 1.5s ease-out forwards;
+                box-shadow: 0 0 6px hsla(var(--third-hue), 100%, 80%, 0.8);
+            `;
+
+            element.appendChild(sparkle);
+
+            // Add sparkle animation keyframes if not exists
+            if (!document.querySelector('#sparkle-keyframes')) {
+                const style = document.createElement('style');
+                style.id = 'sparkle-keyframes';
+                style.textContent = `
+                    @keyframes sparkleAnimation {
+                        0% {
+                            transform: scale(0) rotate(0deg);
+                            opacity: 0;
+                        }
+                        50% {
+                            transform: scale(1) rotate(180deg);
+                            opacity: 1;
+                        }
+                        100% {
+                            transform: scale(0) rotate(360deg);
+                            opacity: 0;
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            setTimeout(() => sparkle.remove(), 1500);
+        };
+
+        // Create sparkles periodically
+        setInterval(createSparkle, 2000);
     }
 
     // Colors are now fixed in CSS - no more dynamic color transitions
