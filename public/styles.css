@@ -5,17 +5,23 @@
     box-sizing: border-box;
 }
 
-/* CSS custom properties for fixed modern colors */
+/* CSS custom properties for dynamic day-based colors */
 :root {
-    --primary-color: #3b82f6;      /* Modern blue */
-    --secondary-color: #6366f1;    /* Indigo */
-    --accent-color: #8b5cf6;       /* Purple */
+    /* Dynamic hues - will be set by JavaScript based on day of year */
+    --primary-hue: 180;           /* Default, will be overridden */
+    --secondary-hue: 130;         /* Default, will be overridden */
+    --third-hue: 230;             /* Default, will be overridden */
+    
+    /* Dynamic colors based on day-of-year hues */
+    --primary-color: hsl(var(--primary-hue), 70%, 50%);
+    --secondary-color: hsl(var(--secondary-hue), 70%, 40%);
+    --accent-color: hsl(var(--third-hue), 70%, 60%);
     
     /* Background colors */
-    --bg-primary: #0f172a;         /* Very dark blue-gray */
-    --bg-secondary: #1e293b;       /* Dark blue-gray */
-    --bg-tertiary: #334155;        /* Medium blue-gray */
-    --bg-card: #1e293b;           /* Card background */
+    --bg-primary: #020617;         /* Much darker blue-gray (2% lightness) */
+    --bg-secondary: #0f172a;       /* Very dark blue-gray */
+    --bg-tertiary: #1e293b;        /* Dark blue-gray */
+    --bg-card: #0f172a;           /* Card background */
     
     /* Text colors */
     --text-primary: #f8fafc;       /* Almost white */
@@ -24,7 +30,7 @@
     
     /* Border colors */
     --border-primary: #334155;     /* Subtle border */
-    --border-accent: #3b82f6;      /* Accent border */
+    --border-accent: var(--primary-color);  /* Dynamic accent border */
     
     /* State colors */
     --success: #10b981;
@@ -75,10 +81,11 @@ body {
     background: linear-gradient(
         135deg,
         var(--bg-primary) 0%,
-        var(--bg-secondary) 50%,
-        var(--bg-tertiary) 100%
+        var(--bg-secondary) 30%,
+        var(--bg-tertiary) 60%,
+        var(--bg-secondary) 100%
     );
-    animation: gradientShift 8s ease-in-out infinite alternate;
+    opacity: 0.9;
 }
 
 /* Vignette layer */
@@ -124,14 +131,13 @@ body {
     -webkit-text-fill-color: transparent;
     text-align: center;
     letter-spacing: -0.04em;
-    line-height: 0.85;
+    line-height: 1.1;
+    padding: 0.1em 0;
     
     /* Modern text rendering */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    
-    animation: textGlow 6s ease-in-out infinite alternate;
 }
 
 /* Showcase section styles */
@@ -179,7 +185,7 @@ body {
 .codeblock-showcase:hover {
     transform: translateY(-5px);
     border-color: var(--border-accent);
-    box-shadow: 0 12px 24px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 12px 24px hsla(var(--primary-hue), 70%, 50%, 0.15);
 }
 
 .codeblock-preview {
@@ -196,6 +202,55 @@ body {
     display: block;
 }
 
+/* Preview controls overlay */
+.preview-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.codeblock-preview:hover .preview-controls {
+    opacity: 1;
+}
+
+.preview-control-btn {
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(5px);
+}
+
+.preview-control-btn:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(1.05);
+}
+
+/* Preview error styling */
+.preview-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 20px;
+    text-align: center;
+    background: linear-gradient(
+        135deg,
+        rgba(239, 68, 68, 0.1),
+        rgba(239, 68, 68, 0.05)
+    );
+}
+
 .codeblock-preview-placeholder {
     display: flex;
     align-items: center;
@@ -205,8 +260,8 @@ body {
     font-size: 1.1rem;
     background: linear-gradient(
         135deg,
-        rgba(59, 130, 246, 0.1),
-        rgba(99, 102, 241, 0.1)
+        hsla(var(--primary-hue), 70%, 50%, 0.1),
+        hsla(var(--secondary-hue), 70%, 40%, 0.1)
     );
 }
 
@@ -351,35 +406,7 @@ body {
 }
 
 /* Animations */
-@keyframes gradientShift {
-    0% {
-        background: linear-gradient(
-            135deg,
-            var(--bg-primary) 0%,
-            var(--bg-secondary) 50%,
-            var(--bg-tertiary) 100%
-        );
-        transform: scale(1) rotate(0deg);
-    }
-    50% {
-        background: linear-gradient(
-            225deg,
-            var(--bg-secondary) 0%,
-            var(--bg-tertiary) 50%,
-            var(--bg-primary) 100%
-        );
-        transform: scale(1.05) rotate(1deg);
-    }
-    100% {
-        background: linear-gradient(
-            315deg,
-            var(--bg-tertiary) 0%,
-            var(--bg-primary) 50%,
-            var(--bg-secondary) 100%
-        );
-        transform: scale(1.02) rotate(-0.5deg);
-    }
-}
+/* Gradient animation removed - using static gradient */
 
 @keyframes vignetteMove {
     0% {
@@ -419,20 +446,7 @@ body {
     }
 }
 
-@keyframes textGlow {
-    0% {
-        background-position: 0% 50%;
-        filter: brightness(1);
-    }
-    50% {
-        background-position: 100% 50%;
-        filter: brightness(1.2);
-    }
-    100% {
-        background-position: 200% 50%;
-        filter: brightness(1.1);
-    }
-}
+/* Text glow animation removed - using static gradient */
 
 /* Responsive design */
 @media (max-width: 768px) {

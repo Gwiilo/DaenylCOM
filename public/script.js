@@ -21,19 +21,33 @@ class DaenylPortfolio {
 
     onReady() {
         console.log('Daenyl.com Portfolio Loaded');
-        // Colors are now set in CSS - no dynamic updates needed
+        this.updateColors();
     }
 
-    // Setup fixed modern colors
+    // Calculate colors based on current day of year
     setupDynamicColors() {
-        // Modern, professional color scheme - no more day-based changes
+        const now = new Date();
+        const start = new Date(now.getFullYear(), 0, 0);
+        const diff = now - start;
+        const oneDay = 1000 * 60 * 60 * 24;
+        const dayOfYear = Math.floor(diff / oneDay);
+        
+        // Ensure we're within 1-365/366 range
+        const currentDay = Math.max(1, Math.min(dayOfYear, this.isLeapYear(now.getFullYear()) ? 366 : 365));
+        
+        // Calculate hues based on day of year
+        const primaryHue = currentDay;
+        const secondaryHue = (primaryHue - 50 + 360) % 360; // Ensure positive
+        const thirdHue = (primaryHue + 50) % 360;
+        
+        // Store colors
         this.colors = {
-            primary: '#3b82f6',    // Modern blue
-            secondary: '#6366f1',  // Indigo
-            third: '#8b5cf6'       // Purple
+            primary: primaryHue,
+            secondary: secondaryHue,
+            third: thirdHue
         };
         
-        console.log('Fixed color scheme loaded:', this.colors);
+        console.log(`Day ${currentDay}: Primary(${primaryHue}°), Secondary(${secondaryHue}°), Third(${thirdHue}°)`);
     }
 
     // Check if year is leap year
@@ -41,7 +55,19 @@ class DaenylPortfolio {
         return ((year % 4 === 0) && (year % 100 !== 0)) || (year % 400 === 0);
     }
 
-    // Colors are now fixed in CSS - no dynamic updates needed
+    // Update CSS custom properties with dynamic colors
+    updateColors() {
+        const root = document.documentElement;
+        
+        root.style.setProperty('--primary-hue', this.colors.primary);
+        root.style.setProperty('--secondary-hue', this.colors.secondary);
+        root.style.setProperty('--third-hue', this.colors.third);
+        
+        // Update derived colors
+        root.style.setProperty('--primary-color', `hsl(${this.colors.primary}, 70%, 50%)`);
+        root.style.setProperty('--secondary-color', `hsl(${this.colors.secondary}, 70%, 40%)`);
+        root.style.setProperty('--accent-color', `hsl(${this.colors.third}, 70%, 60%)`);
+    }
 
     // Start background animations
     startAnimations() {
@@ -282,16 +308,214 @@ class ShowcaseManager {
         }
     }
 
-    initializeThreeJSPreview(name) {
-        // This will be implemented when we add Three.js
+    async initializeThreeJSPreview(name) {
         const previewElement = document.getElementById(`preview-${name}`);
-        if (previewElement) {
-            // For now, just update the placeholder
-            const placeholder = previewElement.querySelector('.codeblock-preview-placeholder');
-            if (placeholder) {
-                placeholder.innerHTML = '🌐 Three.js Preview<br><small>Click to open in editor</small>';
+        if (!previewElement || !window.THREE) return;
+
+        try {
+            // Clear placeholder
+            previewElement.innerHTML = '';
+            
+            // Create Three.js scene for this preview
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020617);
+
+            // Create camera
+            const camera = new THREE.PerspectiveCamera(
+                75, 
+                previewElement.clientWidth / previewElement.clientHeight, 
+                0.1, 
+                1000
+            );
+
+            // Create renderer
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(previewElement.clientWidth, previewElement.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            previewElement.appendChild(renderer.domElement);
+
+            // Add controls overlay
+            const controlsOverlay = document.createElement('div');
+            controlsOverlay.className = 'preview-controls';
+            controlsOverlay.innerHTML = `
+                <button class="preview-control-btn play-btn" title="Play/Pause">⏸️</button>
+                <button class="preview-control-btn fullscreen-btn" title="View in Editor">⛶</button>
+            `;
+            previewElement.appendChild(controlsOverlay);
+
+            // Load and execute the specific codeblock
+            const response = await fetch(`./codeblocks/${name}/script.js`);
+            const codeText = await response.text();
+            
+            // Create execution context for the preview
+            let animateFunction = null;
+            let isPlaying = true;
+            
+            // Create a mini version of the codeblock code
+            const miniVersion = this.createMiniVersion(name, codeText);
+            
+            // Execute the mini version
+            try {
+                // Make globals available
+                window.scene = scene;
+                window.camera = camera;
+                window.renderer = renderer;
+                
+                animateFunction = eval(`(function() {
+                    ${miniVersion}
+                    return typeof animate === 'function' ? animate : null;
+                })()`);
+            } catch (error) {
+                console.error(`Error in ${name} preview:`, error);
+                this.showPreviewError(previewElement, error.message);
+                return;
             }
+
+            // Animation loop
+            let animationId;
+            const animate = () => {
+                if (isPlaying) {
+                    animationId = requestAnimationFrame(animate);
+                    
+                    if (animateFunction) {
+                        try {
+                            animateFunction();
+                        } catch (error) {
+                            console.error(`Animation error in ${name}:`, error);
+                            isPlaying = false;
+                        }
+                    }
+                    
+                    renderer.render(scene, camera);
+                }
+            };
+
+            // Start animation
+            animate();
+
+            // Handle controls
+            const playBtn = controlsOverlay.querySelector('.play-btn');
+            const fullscreenBtn = controlsOverlay.querySelector('.fullscreen-btn');
+
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                isPlaying = !isPlaying;
+                playBtn.textContent = isPlaying ? '⏸️' : '▶️';
+                if (isPlaying) animate();
+            });
+
+            fullscreenBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openInEditor({ name });
+            });
+
+            // Handle resize
+            const resizeObserver = new ResizeObserver(() => {
+                const width = previewElement.clientWidth;
+                const height = previewElement.clientHeight;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            });
+            resizeObserver.observe(previewElement);
+
+            // Store cleanup function
+            previewElement._cleanup = () => {
+                if (animationId) cancelAnimationFrame(animationId);
+                resizeObserver.disconnect();
+                renderer.dispose();
+                scene.clear();
+            };
+
+        } catch (error) {
+            console.error(`Failed to initialize Three.js preview for ${name}:`, error);
+            this.showPreviewError(previewElement, error.message);
         }
+    }
+
+    createMiniVersion(name, codeText) {
+        // Create simplified versions for different codeblocks
+        switch (name) {
+            case 'boids':
+                return `
+                    // Simplified boids for preview
+                    class MiniBoid {
+                        constructor() {
+                            this.position = new THREE.Vector3(
+                                (Math.random() - 0.5) * 6,
+                                (Math.random() - 0.5) * 6,
+                                (Math.random() - 0.5) * 6
+                            );
+                            this.velocity = new THREE.Vector3(
+                                (Math.random() - 0.5) * 1,
+                                (Math.random() - 0.5) * 1,
+                                (Math.random() - 0.5) * 1
+                            );
+                            
+                            const geometry = new THREE.ConeGeometry(0.05, 0.15, 3);
+                            const material = new THREE.MeshBasicMaterial({ 
+                                color: new THREE.Color().setHSL(Math.random(), 0.7, 0.6)
+                            });
+                            this.mesh = new THREE.Mesh(geometry, material);
+                            this.mesh.position.copy(this.position);
+                            scene.add(this.mesh);
+                        }
+                        
+                        update() {
+                            this.position.add(this.velocity.clone().multiplyScalar(0.01));
+                            
+                            // Simple boundary wrapping
+                            ['x', 'y', 'z'].forEach(axis => {
+                                if (this.position[axis] > 4) this.position[axis] = -4;
+                                if (this.position[axis] < -4) this.position[axis] = 4;
+                            });
+                            
+                            this.mesh.position.copy(this.position);
+                            if (this.velocity.length() > 0) {
+                                this.mesh.lookAt(this.position.clone().add(this.velocity));
+                            }
+                        }
+                    }
+                    
+                    const boids = [];
+                    for (let i = 0; i < 15; i++) {
+                        boids.push(new MiniBoid());
+                    }
+                    
+                    camera.position.set(0, 0, 8);
+                    
+                    function animate() {
+                        boids.forEach(boid => boid.update());
+                        camera.position.x = Math.cos(Date.now() * 0.0003) * 8;
+                        camera.position.z = Math.sin(Date.now() * 0.0003) * 8;
+                        camera.lookAt(0, 0, 0);
+                    }
+                `;
+            default:
+                // Generic fallback
+                return `
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+                    const cube = new THREE.Mesh(geometry, material);
+                    scene.add(cube);
+                    camera.position.z = 3;
+                    
+                    function animate() {
+                        cube.rotation.x += 0.01;
+                        cube.rotation.y += 0.01;
+                    }
+                `;
+        }
+    }
+
+    showPreviewError(previewElement, error) {
+        previewElement.innerHTML = `
+            <div class="preview-error">
+                <div style="color: var(--error); font-size: 2rem; margin-bottom: 10px;">⚠️</div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">Preview Error</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 5px;">${error}</div>
+            </div>
+        `;
     }
 
     openInEditor(codeblock) {
